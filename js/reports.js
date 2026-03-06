@@ -471,7 +471,7 @@ async function generatePDF(entries, filters, project) {
     ['Site Address', project.address || '—'],
     ['Client', project.client || '—'],
     ['Contractor', project.contractor || '—'],
-    ['Inspector', project.inspector || '—'],
+    ['Observer', [project.observerFirst, project.observerLast].filter(Boolean).join(' ') || '—'],
     ['Approval Ref', project.approvalRef || '—'],
   ];
 
@@ -565,25 +565,27 @@ async function generatePDF(entries, filters, project) {
   doc.autoTable({
     startY: y,
     margin: { left: MARGIN, right: MARGIN },
-    head: [['Date', 'Time', 'Type', 'Title', 'Status', 'Inspector']],
+    head: [['ID', 'Date', 'Time', 'Type', 'Title', 'Status', 'Observer']],
     body: entries.map(e => [
+      e.entryCode || '—',
       formatDateShort(e.date),
       formatTime(e.time),
       getType(e.type).label,
-      (e.title || 'Untitled').slice(0, 40),
+      (e.title || 'Untitled').slice(0, 35),
       getStatus(e.status).label,
-      e.inspector || '—',
+      e.observer || e.inspector || '—',
     ]),
     styles: { fontSize: 8, cellPadding: 3, textColor: slate700 },
     headStyles: { fillColor: charcoal, textColor: white, fontStyle: 'bold', fontSize: 7.5 },
     alternateRowStyles: { fillColor: slate50 },
     columnStyles: {
-      0: { cellWidth: 22 },
-      1: { cellWidth: 14 },
-      2: { cellWidth: 32 },
-      3: { cellWidth: 60 },
-      4: { cellWidth: 24 },
+      0: { cellWidth: 28, font: 'courier', fontSize: 7 },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 13 },
+      3: { cellWidth: 28 },
+      4: { cellWidth: 48 },
       5: { cellWidth: 22 },
+      6: { cellWidth: 15 },
     },
     didParseCell: (data) => {
       if (data.column.index === 4 && data.section === 'body') {
@@ -599,16 +601,12 @@ async function generatePDF(entries, filters, project) {
 
   y = doc.lastAutoTable.finalY + 10;
 
-  // ── Detailed Entries ──
+  // ── Detailed Entries — one page per entry ──
   const grouped = groupBy(entries, 'date');
   const sortedDates = Object.keys(grouped).sort();
 
-  for (const date of sortedDates) {
-    const dayEntries = grouped[date].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-    newPage();
-
-    // Date header — muted charcoal with left accent
+  // Helper: draw the date header band (repeated at top of each entry page)
+  const drawDateBand = (date, totalForDate) => {
     doc.setFillColor(...charcoal);
     doc.rect(MARGIN, y, 3, 9, 'F');
     doc.setFillColor(...slate50);
@@ -622,85 +620,253 @@ async function generatePDF(entries, filters, project) {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...slate400);
     doc.setFontSize(8);
-    doc.text(`${dayEntries.length} entr${dayEntries.length === 1 ? 'y' : 'ies'}`, PAGE_W - MARGIN - 3, y + 6.2, { align: 'right' });
+    doc.text(`${totalForDate} entr${totalForDate === 1 ? 'y' : 'ies'}`, PAGE_W - MARGIN - 3, y + 6.2, { align: 'right' });
     y += 13;
+  };
+
+  // Helper: draw a section divider with label
+  const drawSectionRule = (label) => {
+    y += 4;
+    doc.setDrawColor(...slate200);
+    doc.setLineWidth(0.3);
+    doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+    y += 4;
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...slate400);
+    doc.text(label.toUpperCase(), MARGIN, y);
+    y += 5;
+  };
+
+  for (const date of sortedDates) {
+    const dayEntries = grouped[date].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
     for (const entry of dayEntries) {
+      newPage();
+      drawDateBand(date, dayEntries.length);
+
       const type = getType(entry.type);
       const status = getStatus(entry.status);
-      const statusCol = statusColors[entry.status] || blue;
+      const typeRgb = type.color.match(/\w\w/g)?.map(x => parseInt(x, 16)) || charcoal;
+      const observer = entry.observer || entry.inspector || '';
 
-      checkY(35);
+      // Build conditions string
+      const conditionsParts = [
+        entry.weather,
+        entry.temperature != null ? `${entry.temperature}°C` : null,
+        entry.windDirection ? `Wind: ${entry.windDirection}` : null,
+      ].filter(Boolean);
+      const hasConditions = conditionsParts.length > 0;
+      const hasLocation = entry.location?.lat;
 
-      // Entry header bar — clean white with left color accent
+      // Calculate entry header height dynamically
+      const headerH = 20 + (hasConditions ? 6 : 0) + (hasLocation ? 6 : 0);
+
+      checkY(headerH + 4);
+
+      // Entry header box
       doc.setFillColor(...white);
       doc.setDrawColor(...slate200);
       doc.setLineWidth(0.25);
-      doc.roundedRect(MARGIN, y, CONTENT_W, 14, 2, 2, 'FD');
-      // Left accent stripe in type color
-      const typeRgb = type.color.match(/\w\w/g)?.map(x => parseInt(x, 16)) || charcoal;
+      doc.roundedRect(MARGIN, y, CONTENT_W, headerH, 2, 2, 'FD');
+      // Left accent stripe
       doc.setFillColor(...typeRgb);
-      doc.roundedRect(MARGIN, y, 3.5, 14, 1, 1, 'F');
+      doc.roundedRect(MARGIN, y, 3.5, headerH, 1, 1, 'F');
 
-      doc.setTextColor(...slate900);
-      doc.setFontSize(9.5);
+      const hx = MARGIN + 7; // text start x inside header
+      let hy = y + 6;
+
+      // Row 1: Type label (left) | Entry Code (right, monospace)
+      doc.setFontSize(7);
       doc.setFont('helvetica', 'bold');
-      doc.text(entry.title || 'Untitled Entry', MARGIN + 7, y + 5.5);
+      doc.setTextColor(...typeRgb);
+      doc.text(type.label.toUpperCase(), hx, hy);
 
-      doc.setFontSize(7.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...slate400);
-      doc.text(`${type.label}  ·  ${formatTime(entry.time)}${entry.inspector ? `  ·  ${entry.inspector}` : ''}`, MARGIN + 7, y + 11);
+      if (entry.entryCode) {
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...slate600);
+        doc.text(entry.entryCode, PAGE_W - MARGIN - 5, hy, { align: 'right' });
+      }
+      hy += 6;
 
-      // Status badge — tinted (not solid)
+      // Row 2: Title (left) | Status badge (right)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...slate900);
+      const titleMaxW = CONTENT_W - 40;
+      const titleLine = doc.splitTextToSize(entry.title || 'Untitled Entry', titleMaxW)[0];
+      doc.text(titleLine, hx, hy);
+
       const statusBg = statusBgColors[entry.status] || slate50;
       const statusTxt = statusTextColors[entry.status] || slate700;
       doc.setFillColor(...statusBg);
       doc.setDrawColor(...statusTxt);
       doc.setLineWidth(0.3);
-      doc.roundedRect(PAGE_W - MARGIN - 30, y + 3.5, 27, 6.5, 1.5, 1.5, 'FD');
+      doc.roundedRect(PAGE_W - MARGIN - 32, y + 3.5, 29, 7, 1.5, 1.5, 'FD');
       doc.setTextColor(...statusTxt);
       doc.setFontSize(6.5);
       doc.setFont('helvetica', 'bold');
-      doc.text(status.label.toUpperCase(), PAGE_W - MARGIN - 16.5, y + 7.5, { align: 'center' });
+      doc.text(status.label.toUpperCase(), PAGE_W - MARGIN - 17.5, y + 7.8, { align: 'center' });
+      hy += 7;
 
-      y += 17;
+      // Row 3: Observer · Time
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(...slate600);
+      const observerTimeParts = [
+        observer ? `Observer: ${observer}` : null,
+        entry.time ? formatTime(entry.time) : null,
+      ].filter(Boolean);
+      doc.text(observerTimeParts.join('   ·   '), hx, hy);
+      hy += 6;
 
-      // Description — full text with automatic page breaks
-      if (entry.description) {
-        checkY(8);
-        doc.setTextColor(...slate900);
-        doc.setFontSize(9);
+      // Row 4: Conditions (if any)
+      if (hasConditions) {
         doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...slate600);
+        doc.text(`Conditions: ${conditionsParts.join('  ·  ')}`, hx, hy);
+        hy += 6;
+      }
+
+      // Row 5: Location coords (if any)
+      if (hasLocation) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...slate600);
+        const coordStr = `${entry.location.lat.toFixed(6)}, ${entry.location.lng.toFixed(6)}${entry.location.address ? `  —  ${entry.location.address}` : ''}`;
+        doc.text(`Location: ${coordStr}`, hx, hy);
+        hy += 6;
+      }
+
+      y += headerH + 4;
+
+      // ── DESCRIPTION ──
+      drawSectionRule('Description');
+      doc.setTextColor(...slate900);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      if (entry.description) {
         const lines = doc.splitTextToSize(entry.description, CONTENT_W);
         renderText(lines, MARGIN, 4.5);
-        y += 4;
+        y += 2;
+      } else {
+        doc.setTextColor(...slate400);
+        doc.text('N/A', MARGIN, y);
+        y += 5;
       }
 
-      // Weather/conditions row
-      if (entry.weather || entry.temperature != null || entry.windDirection) {
-        checkY(8);
-        const conditions = [
-          entry.weather,
-          entry.temperature != null ? `${entry.temperature}°C` : null,
-          entry.windDirection ? `Wind: ${entry.windDirection}` : null,
-        ].filter(Boolean).join('  ·  ');
-        doc.setFontSize(8);
+      // ── CORRECTIVE ACTIONS ──
+      drawSectionRule('Corrective Actions');
+      if (filters.includeCorrective && entry.correctiveActions) {
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(146, 64, 14);
+        doc.text('ACTION REQUIRED', MARGIN, y);
+        y += 5;
+        doc.setFontSize(8.5);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...slate600);
-        doc.text(`Conditions: ${conditions}`, MARGIN, y);
-        y += 6;
+        doc.setTextColor(...slate700);
+        const caLines = doc.splitTextToSize(entry.correctiveActions, CONTENT_W - 4);
+        renderText(caLines, MARGIN + 2, 4.5);
+        y += 2;
+      } else {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...slate400);
+        doc.text('None Required', MARGIN, y);
+        y += 5;
       }
 
-      // Location — map image + coordinates
-      if (filters.includeMaps && entry.location?.lat) {
+      // ── FOLLOW-UP ──
+      drawSectionRule('Follow-Up');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      if (entry.followUpRequired) {
+        doc.setTextColor(146, 64, 14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(
+          entry.followUpDate ? `Required by ${formatDateShort(entry.followUpDate)}` : 'Required — no date specified',
+          MARGIN, y
+        );
+        y += 5;
+      } else {
+        doc.setTextColor(...slate400);
+        doc.text('None Required', MARGIN, y);
+        y += 5;
+      }
+
+      // ── PHOTOGRAPHS ──
+      drawSectionRule('Photographs');
+      const photosToShow = filters.includePhotos
+        ? (entry.photos || []).filter(p => !p.startsWith('data:video')).slice(0, 6)
+        : [];
+      if (photosToShow.length > 0) {
+        const COLS = 2;
+        const GAP = 4;
+        const imgW = (CONTENT_W - GAP * (COLS - 1)) / COLS;
+        const captions = entry.photoCaptions || [];
+        const numRows = Math.ceil(photosToShow.length / COLS);
+
+        for (let row = 0; row < numRows; row++) {
+          const rowPhotos = photosToShow.slice(row * COLS, row * COLS + COLS);
+          const rowHeights = rowPhotos.map(src => {
+            try {
+              const props = doc.getImageProperties(src);
+              const aspect = props.height / props.width;
+              return Math.min(130, Math.max(25, imgW * aspect));
+            } catch { return imgW * 0.75; }
+          });
+          const rowH = Math.max(...rowHeights);
+          checkY(rowH + 6);
+
+          for (let col = 0; col < rowPhotos.length; col++) {
+            try {
+              const src = rowPhotos[col];
+              const ext = src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+              const xPos = MARGIN + col * (imgW + GAP);
+              const yOff = (rowH - rowHeights[col]) / 2;
+              doc.addImage(src, ext, xPos, y + yOff, imgW, rowHeights[col], undefined, 'MEDIUM');
+            } catch {}
+          }
+          y += rowH + 3;
+
+          let maxCapLines = 0;
+          for (let col = 0; col < rowPhotos.length; col++) {
+            const pi = row * COLS + col;
+            const cap = (captions[pi] || '').trim();
+            if (!cap) continue;
+            doc.setFontSize(7);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(...slate400);
+            const capLines = doc.splitTextToSize(cap, imgW - 2);
+            capLines.forEach((line, li) => {
+              doc.text(line, MARGIN + col * (imgW + GAP) + 1, y + li * 3.8);
+            });
+            maxCapLines = Math.max(maxCapLines, capLines.length);
+          }
+          if (maxCapLines > 0) y += maxCapLines * 3.8 + 2;
+          y += 2;
+        }
+      } else {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...slate400);
+        doc.text('None', MARGIN, y);
+        y += 5;
+      }
+
+      // ── MAP ──
+      drawSectionRule('Location Map');
+      if (filters.includeMaps && hasLocation) {
         const mapImg = mapImages[entry.id];
         if (mapImg) {
           checkY(44);
           try {
             doc.addImage(mapImg, 'PNG', MARGIN, y, CONTENT_W, 40, undefined, 'MEDIUM');
             y += 42;
-          } catch { /* skip broken image */ }
+          } catch {}
         }
         checkY(8);
         doc.setFontSize(8);
@@ -709,111 +875,23 @@ async function generatePDF(entries, filters, project) {
         const coordText = `${entry.location.lat.toFixed(6)}, ${entry.location.lng.toFixed(6)}${entry.location.address ? `  —  ${entry.location.address}` : ''}`;
         doc.text(coordText, MARGIN, y);
         y += 6;
-      }
-
-      // Corrective actions — full text, dynamically sized
-      if (filters.includeCorrective && entry.correctiveActions) {
-        checkY(16);
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(146, 64, 14);
-        doc.text('CORRECTIVE ACTION REQUIRED', MARGIN, y);
-        y += 5;
-        doc.setFontSize(8.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...slate700);
-        const caLines = doc.splitTextToSize(entry.correctiveActions, CONTENT_W - 4);
-        renderText(caLines, MARGIN + 2, 4.5);
-        y += 4;
-      }
-
-      // Photos with captions — max 2 columns, correct aspect ratio per photo
-      if (filters.includePhotos && entry.photos?.length > 0) {
-        const photosToShow = entry.photos.filter(p => !p.startsWith('data:video')).slice(0, 6);
-        if (photosToShow.length > 0) {
-          const COLS = 2;
-          const GAP = 4;
-          const imgW = (CONTENT_W - GAP * (COLS - 1)) / COLS;
-          const captions = entry.photoCaptions || [];
-          const numRows = Math.ceil(photosToShow.length / COLS);
-
-          for (let row = 0; row < numRows; row++) {
-            const rowPhotos = photosToShow.slice(row * COLS, row * COLS + COLS);
-
-            // Determine height for each photo using its real aspect ratio
-            const rowHeights = rowPhotos.map(src => {
-              try {
-                const props = doc.getImageProperties(src);
-                const aspect = props.height / props.width;
-                return Math.min(130, Math.max(25, imgW * aspect));
-              } catch {
-                return imgW * 0.75;
-              }
-            });
-            const rowH = Math.max(...rowHeights);
-
-            checkY(rowH + 6);
-
-            for (let col = 0; col < rowPhotos.length; col++) {
-              try {
-                const src = rowPhotos[col];
-                const ext = src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-                const photoH = rowHeights[col];
-                const xPos = MARGIN + col * (imgW + GAP);
-                const yOff = (rowH - photoH) / 2; // vertically centre within row
-                doc.addImage(src, ext, xPos, y + yOff, imgW, photoH, undefined, 'MEDIUM');
-              } catch {}
-            }
-            y += rowH + 3;
-
-            // Captions for this row
-            let maxCapLines = 0;
-            for (let col = 0; col < rowPhotos.length; col++) {
-              const pi = row * COLS + col;
-              const cap = (captions[pi] || '').trim();
-              if (!cap) continue;
-              doc.setFontSize(7);
-              doc.setFont('helvetica', 'italic');
-              doc.setTextColor(...slate400);
-              const capLines = doc.splitTextToSize(cap, imgW - 2);
-              capLines.forEach((line, li) => {
-                doc.text(line, MARGIN + col * (imgW + GAP) + 1, y + li * 3.8);
-              });
-              maxCapLines = Math.max(maxCapLines, capLines.length);
-            }
-            if (maxCapLines > 0) y += maxCapLines * 3.8 + 2;
-
-            y += 2;
-          }
-        }
-      }
-
-      // Follow-up
-      if (entry.followUpRequired) {
-        checkY(8);
-        doc.setTextColor(146, 64, 14);
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Follow-up required${entry.followUpDate ? ` by ${formatDateShort(entry.followUpDate)}` : ''}`, MARGIN, y);
-        y += 6;
-      }
-
-      // Tags
-      if (entry.tags?.length > 0) {
-        checkY(7);
-        doc.setFontSize(7.5);
+      } else {
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate400);
-        doc.text('Tags: ' + entry.tags.join(', '), MARGIN, y);
+        doc.text('N/A', MARGIN, y);
         y += 5;
       }
 
-      y += 5;
-
-      // Separator
-      doc.setDrawColor(...slate200);
-      doc.setLineWidth(0.3);
-      doc.line(MARGIN, y - 2, PAGE_W - MARGIN, y - 2);
+      // ── TAGS ──
+      if (entry.tags?.length > 0) {
+        drawSectionRule('Tags');
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...slate600);
+        doc.text(entry.tags.join(', '), MARGIN, y);
+        y += 5;
+      }
     }
   }
 
@@ -925,7 +1003,7 @@ function generateHTML(entries, filters, project) {
   <h1>${sanitizeHtml(project.reportTitle || 'Environmental Monitoring Report')}</h1>
   <div class="subtitle">${sanitizeHtml(project.reportSubtitle || project.name || 'Construction Site Environmental Inspection')}</div>
   <div class="project-grid">
-    ${[['Project No.', project.number], ['Site Address', project.address], ['Client', project.client], ['Contractor', project.contractor], ['Inspector', project.inspector], ['Approval Ref', project.approvalRef]].filter(([,v]) => v).map(([l,v]) => `
+    ${[['Project No.', project.number], ['Site Address', project.address], ['Client', project.client], ['Contractor', project.contractor], ['Observer', [project.observerFirst, project.observerLast].filter(Boolean).join(' ')], ['Approval Ref', project.approvalRef]].filter(([,v]) => v).map(([l,v]) => `
       <div class="project-item"><label>${l}</label><span>${sanitizeHtml(v)}</span></div>
     `).join('')}
   </div>
@@ -941,17 +1019,18 @@ function generateHTML(entries, filters, project) {
 
   <h2>Summary</h2>
   <table class="summary-table">
-    <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Title</th><th>Status</th><th>Inspector</th></tr></thead>
+    <thead><tr><th>ID</th><th>Date</th><th>Time</th><th>Type</th><th>Title</th><th>Status</th><th>Observer</th></tr></thead>
     <tbody>
       ${entries.map(e => {
         const sc = statusColors[e.status] || { bg: '#f1f5f9', color: '#64748b' };
         return `<tr>
+          <td style="font-family:monospace;font-size:11px">${sanitizeHtml(e.entryCode || '—')}</td>
           <td>${formatDateShort(e.date)}</td>
           <td>${formatTime(e.time)}</td>
           <td style="color:${getType(e.type).color};font-weight:600">${sanitizeHtml(getType(e.type).label)}</td>
           <td>${sanitizeHtml(e.title || '—')}</td>
           <td><span class="status-badge" style="background:${sc.bg};color:${sc.color};border-color:${sc.border}">${sanitizeHtml(getStatus(e.status).label)}</span></td>
-          <td>${sanitizeHtml(e.inspector || '—')}</td>
+          <td>${sanitizeHtml(e.observer || e.inspector || '—')}</td>
         </tr>`;
       }).join('')}
     </tbody>
@@ -980,13 +1059,17 @@ function generateHTML(entries, filters, project) {
               <div class="entry-header">
                 <div class="type-bar" style="background:${type.color}"></div>
                 <div class="entry-meta">
-                  <div class="type-label" style="color:${type.color}">${sanitizeHtml(type.label)}</div>
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div class="type-label" style="color:${type.color}">${sanitizeHtml(type.label)}</div>
+                    ${e.entryCode ? `<code style="font-size:10px;color:#64748b;background:#f1f5f9;padding:1px 6px;border-radius:4px">${sanitizeHtml(e.entryCode)}</code>` : ''}
+                  </div>
                   <div class="entry-title">${sanitizeHtml(e.title || 'Untitled Entry')}</div>
                   <div class="meta-row">
                     ${e.time ? `<span>${formatTime(e.time)}</span>` : ''}
-                    ${e.inspector ? `<span>👤 ${sanitizeHtml(e.inspector)}</span>` : ''}
+                    ${(e.observer || e.inspector) ? `<span>👤 ${sanitizeHtml(e.observer || e.inspector)}</span>` : ''}
                     ${e.weather ? `<span>🌤 ${sanitizeHtml(e.weather)}</span>` : ''}
                     ${e.temperature != null ? `<span>${e.temperature}°C</span>` : ''}
+                    ${e.location?.lat ? `<span>📍 ${e.location.lat.toFixed(5)}, ${e.location.lng.toFixed(5)}</span>` : ''}
                   </div>
                 </div>
                 <span class="status-badge" style="background:${sc.bg};color:${sc.color};border-color:${sc.border}">${sanitizeHtml(status.label)}</span>
@@ -1053,7 +1136,8 @@ function generateMarkdown(entries, filters, project) {
   if (project.address)     md += `| Site Address | ${project.address} |\n`;
   if (project.client)      md += `| Client | ${project.client} |\n`;
   if (project.contractor)  md += `| Contractor | ${project.contractor} |\n`;
-  if (project.inspector)   md += `| Inspector | ${project.inspector} |\n`;
+  const mdObserver = [project.observerFirst, project.observerLast].filter(Boolean).join(' ');
+  if (mdObserver)          md += `| Observer | ${mdObserver} |\n`;
   if (project.approvalRef) md += `| Approval Ref | ${project.approvalRef} |\n`;
   md += `| Report Period | ${formatDateShort(filters.dateFrom)} — ${formatDateShort(filters.dateTo)} |\n`;
   md += `| Total Entries | ${entries.length} |\n`;
@@ -1071,10 +1155,10 @@ function generateMarkdown(entries, filters, project) {
 
   // Entries table
   md += `### Entries Summary\n\n`;
-  md += `| Date | Time | Type | Title | Status | Inspector |\n`;
-  md += `|------|------|------|-------|--------|-----------|\n`;
+  md += `| ID | Date | Time | Type | Title | Status | Observer |\n`;
+  md += `|------|------|------|-------|-------|--------|-----------|\n`;
   entries.forEach(e => {
-    md += `| ${formatDateShort(e.date)} | ${formatTime(e.time)} | ${getType(e.type).label} | ${(e.title || 'Untitled').replace(/\|/g, '\\|')} | ${getStatus(e.status).label} | ${e.inspector || '—'} |\n`;
+    md += `| ${e.entryCode || '—'} | ${formatDateShort(e.date)} | ${formatTime(e.time)} | ${getType(e.type).label} | ${(e.title || 'Untitled').replace(/\|/g, '\\|')} | ${getStatus(e.status).label} | ${(e.observer || e.inspector || '—').replace(/\|/g, '\\|')} |\n`;
   });
   md += '\n---\n\n';
 
@@ -1096,7 +1180,7 @@ function generateMarkdown(entries, filters, project) {
       md += `**Type:** ${type.label}  \n`;
       md += `**Status:** ${status.label}  \n`;
       if (e.time) md += `**Time:** ${formatTime(e.time)}  \n`;
-      if (e.inspector) md += `**Inspector:** ${e.inspector}  \n`;
+      if (e.observer || e.inspector) md += `**Observer:** ${e.observer || e.inspector}  \n`;
       if (e.weather) md += `**Weather:** ${e.weather}${e.temperature != null ? `, ${e.temperature}°C` : ''}${e.windDirection ? `, Wind: ${e.windDirection}` : ''}  \n`;
       md += '\n';
 

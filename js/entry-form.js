@@ -42,7 +42,7 @@ export async function renderEntryForm(entryId, project, navigate) {
     <div class="page-body animate-in">
       <form id="entry-form" class="entry-form" novalidate>
 
-        <!-- ── Date / Time / Inspector ── -->
+        <!-- ── Date / Time / Observer ── -->
         <div class="form-section">
           <div class="form-section-header">Observation Details</div>
           <div class="form-section-body">
@@ -58,9 +58,15 @@ export async function renderEntryForm(entryId, project, navigate) {
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Inspector / Author</label>
-                <input type="text" id="f-inspector" value="${sanitizeHtml(isEdit ? (entry.inspector || '') : (project.inspector || ''))}" placeholder="Inspector name">
+                <label>Observer — First Name</label>
+                <input type="text" id="f-observer-first" value="${sanitizeHtml(isEdit ? (entry.observerFirst || '') : (project.observerFirst || ''))}" placeholder="First name">
               </div>
+              <div class="form-group">
+                <label>Observer — Last Name</label>
+                <input type="text" id="f-observer-last" value="${sanitizeHtml(isEdit ? (entry.observerLast || '') : (project.observerLast || ''))}" placeholder="Last name">
+              </div>
+            </div>
+            <div class="form-row">
               <div class="form-group">
                 <label>Weather</label>
                 <select id="f-weather">
@@ -68,12 +74,12 @@ export async function renderEntryForm(entryId, project, navigate) {
                   ${WEATHER_OPTIONS.map(w => `<option value="${sanitizeHtml(w)}" ${isEdit && entry.weather === w ? 'selected' : ''}>${sanitizeHtml(w)}</option>`).join('')}
                 </select>
               </div>
-            </div>
-            <div class="form-row">
               <div class="form-group">
                 <label>Temperature (°C)</label>
                 <input type="number" id="f-temp" min="-20" max="60" step="0.5" value="${isEdit && entry.temperature != null ? entry.temperature : ''}">
               </div>
+            </div>
+            <div class="form-row">
               <div class="form-group">
                 <label>Wind Direction</label>
                 <select id="f-wind">
@@ -686,16 +692,29 @@ async function saveEntryForm(existingEntry, formState, isEdit, project, navigate
 
   const order = isEdit ? (existingEntry.order ?? 1) : await getNextOrder(date);
 
+  const observerFirst = document.getElementById('f-observer-first')?.value?.trim() || '';
+  const observerLast  = document.getElementById('f-observer-last')?.value?.trim() || '';
+  const observer = [observerFirst, observerLast].filter(Boolean).join(' ');
+  const initials = [
+    observerFirst ? observerFirst[0].toUpperCase() : '',
+    observerLast  ? observerLast[0].toUpperCase()  : '',
+  ].filter(Boolean).join('') || 'XX';
+  const entryCode = `${initials}-${date.replace(/-/g, '')}-${String(order).padStart(3, '0')}`;
+
   const entry = {
     id:               isEdit ? existingEntry.id : uuid(),
     date,
     time:             document.getElementById('f-time')?.value || nowTime(),
     order,
+    entryCode:        isEdit ? (existingEntry.entryCode || entryCode) : entryCode,
     type:             formState.type,
     status:           formState.status,
     title,
     description:      document.getElementById('f-description')?.value?.trim() || '',
-    inspector:        document.getElementById('f-inspector')?.value?.trim() || '',
+    observerFirst,
+    observerLast,
+    observer,
+    observerInitials: initials,
     weather:          document.getElementById('f-weather')?.value || '',
     temperature:      parseFloat(document.getElementById('f-temp')?.value) || null,
     windDirection:    document.getElementById('f-wind')?.value || '',

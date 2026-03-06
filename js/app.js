@@ -316,9 +316,15 @@ async function renderSettings({ container }) {
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Default Inspector</label>
-                <input type="text" id="set-inspector" value="${sanitizeHtml(project.inspector)}" placeholder="Inspector name">
+                <label>Observer — First Name</label>
+                <input type="text" id="set-observer-first" value="${sanitizeHtml(project.observerFirst || '')}" placeholder="First name">
               </div>
+              <div class="form-group">
+                <label>Observer — Last Name</label>
+                <input type="text" id="set-observer-last" value="${sanitizeHtml(project.observerLast || '')}" placeholder="Last name">
+              </div>
+            </div>
+            <div class="form-row">
               <div class="form-group">
                 <label>Approval / Consent Ref</label>
                 <input type="text" id="set-approval" value="${sanitizeHtml(project.approvalRef)}" placeholder="e.g. DA-2024-100">
@@ -420,7 +426,8 @@ async function renderSettings({ container }) {
       address:       document.getElementById('set-address').value.trim(),
       client:        document.getElementById('set-client').value.trim(),
       contractor:    document.getElementById('set-contractor').value.trim(),
-      inspector:     document.getElementById('set-inspector').value.trim(),
+      observerFirst: document.getElementById('set-observer-first').value.trim(),
+      observerLast:  document.getElementById('set-observer-last').value.trim(),
       approvalRef:   document.getElementById('set-approval').value.trim(),
       reportTitle:   document.getElementById('set-report-title').value.trim() || 'Environmental Monitoring Report',
       reportSubtitle: document.getElementById('set-report-subtitle').value.trim() || 'Construction Site Environmental Inspection',
@@ -668,7 +675,8 @@ export function createEntryCard(entry, { navigate, compact = false, onDelete, on
         <div class="entry-meta-row">
           <span class="entry-type-label" style="color:${type.color}">${sanitizeHtml(type.label)}</span>
           <div style="display:flex;align-items:center;gap:6px">
-            ${entry.inspector ? `<span class="inspector-badge">${sanitizeHtml(entry.inspector)}</span>` : ''}
+            ${(entry.observer || entry.inspector) ? `<span class="inspector-badge">${sanitizeHtml(entry.observer || entry.inspector)}</span>` : ''}
+            ${entry.entryCode ? `<span class="inspector-badge" style="font-family:monospace;letter-spacing:0.3px">${sanitizeHtml(entry.entryCode)}</span>` : ''}
             <span class="entry-time">${formatTime(entry.time)}</span>
           </div>
         </div>
