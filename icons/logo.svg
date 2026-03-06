@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <clipPath id="sqclip">
+      <rect width="200" height="200" rx="14" ry="14"/>
+    </clipPath>
+  </defs>
+  <!-- Black square background -->
+  <rect width="200" height="200" rx="14" ry="14" fill="#111111"/>
+  <!-- Green top-right corner -->
+  <path d="M200,0 L200,72 Q200,0 128,0 Z" fill="#2d5c2d" clip-path="url(#sqclip)"/>
+  <!-- Green bottom-left corner -->
+  <path d="M0,200 L72,200 Q0,200 0,128 Z" fill="#2d5c2d" clip-path="url(#sqclip)"/>
+  <!-- White circle fill -->
+  <circle cx="100" cy="100" r="78" fill="white"/>
+  <!-- Black circle stroke -->
+  <circle cx="100" cy="100" r="78" fill="none" stroke="#111111" stroke-width="9"/>
+  <!-- Compound leaf: rachis (stem) -->
+  <path d="M 106,155 C 96,110 88,75 82,48" stroke="#2d5c2d" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+  <!-- Leaflets -->
+  <path d="M 106.6,143.7 C 106.4,137.5 109.7,134.2 122.5,135.4 C 112.3,139.2 111.6,147.5 106.6,143.7 Z" fill="#2d5c2d"/><path d="M 100.7,145.0 C 97.7,149.5 93.6,150.2 84.8,143.0 C 94.2,145.4 99.0,140.0 100.7,145.0 Z" fill="#2d5c2d"/><path d="M 102.6,126.1 C 101.9,118.9 105.7,114.6 121.1,114.2 C 109.2,120.0 108.8,129.7 102.6,126.1 Z" fill="#2d5c2d"/><path d="M 96.8,127.4 C 93.5,132.9 88.5,134.1 76.8,126.6 C 88.7,128.5 94.0,121.7 96.8,127.4 Z" fill="#2d5c2d"/><path d="M 98.4,107.3 C 97.5,99.3 101.6,94.5 118.6,94.3 C 105.5,100.6 105.3,111.4 98.4,107.3 Z" fill="#2d5c2d"/><path d="M 92.5,108.6 C 89.0,114.8 83.4,116.2 70.6,107.7 C 83.7,109.8 89.5,102.1 92.5,108.6 Z" fill="#2d5c2d"/><path d="M 94.2,88.8 C 93.3,81.7 96.9,77.2 112.3,76.3 C 100.6,82.5 100.6,92.2 94.2,88.8 Z" fill="#2d5c2d"/><path d="M 88.4,90.2 C 85.5,95.8 80.5,97.2 68.4,90.4 C 80.4,91.6 85.3,84.6 88.4,90.2 Z" fill="#2d5c2d"/><path d="M 90.4,71.9 C 89.2,65.9 91.9,62.0 104.7,60.9 C 95.3,66.4 96.0,74.7 90.4,71.9 Z" fill="#2d5c2d"/><path d="M 84.6,73.3 C 82.4,78.2 78.5,79.6 68.6,74.0 C 78.2,74.8 82.0,68.6 84.6,73.3 Z" fill="#2d5c2d"/><path d="M 84.2,58.1 C 78.3,57.0 76.0,53.4 80.8,42.5 C 81.5,52.1 89.2,54.5 84.2,58.1 Z" fill="#2d5c2d"/>
+  <!-- Lower stem to base -->
+  <path d="M 106,155 Q 104,160 104,165" stroke="#2d5c2d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg>
