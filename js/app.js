@@ -324,6 +324,16 @@ async function renderSettings({ container }) {
                 <input type="text" id="set-approval" value="${sanitizeHtml(project.approvalRef)}" placeholder="e.g. DA-2024-100">
               </div>
             </div>
+            <div class="divider"></div>
+            <div style="font-size:12px;font-weight:600;color:var(--slate-500);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px">Report Header</div>
+            <div class="form-group">
+              <label>Report Title</label>
+              <input type="text" id="set-report-title" value="${sanitizeHtml(project.reportTitle || 'Environmental Monitoring Report')}" placeholder="Report title">
+            </div>
+            <div class="form-group">
+              <label>Report Subtitle</label>
+              <input type="text" id="set-report-subtitle" value="${sanitizeHtml(project.reportSubtitle || 'Construction Site Environmental Inspection')}" placeholder="Report subtitle">
+            </div>
           </div>
         </div>
 
@@ -405,13 +415,15 @@ async function renderSettings({ container }) {
   document.getElementById('save-settings-btn')?.addEventListener('click', async () => {
     App.project = {
       ...App.project,
-      name:        document.getElementById('set-name').value.trim(),
-      number:      document.getElementById('set-number').value.trim(),
-      address:     document.getElementById('set-address').value.trim(),
-      client:      document.getElementById('set-client').value.trim(),
-      contractor:  document.getElementById('set-contractor').value.trim(),
-      inspector:   document.getElementById('set-inspector').value.trim(),
-      approvalRef: document.getElementById('set-approval').value.trim(),
+      name:          document.getElementById('set-name').value.trim(),
+      number:        document.getElementById('set-number').value.trim(),
+      address:       document.getElementById('set-address').value.trim(),
+      client:        document.getElementById('set-client').value.trim(),
+      contractor:    document.getElementById('set-contractor').value.trim(),
+      inspector:     document.getElementById('set-inspector').value.trim(),
+      approvalRef:   document.getElementById('set-approval').value.trim(),
+      reportTitle:   document.getElementById('set-report-title').value.trim() || 'Environmental Monitoring Report',
+      reportSubtitle: document.getElementById('set-report-subtitle').value.trim() || 'Construction Site Environmental Inspection',
     };
     await setSetting('project', App.project);
 

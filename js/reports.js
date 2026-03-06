@@ -335,16 +335,16 @@ async function generatePDF(entries, filters, project) {
   const MARGIN = 18;
   const CONTENT_W = PAGE_W - MARGIN * 2;
 
-  // Muted, elegant palette
-  const charcoal  = [30, 41, 59];   // slate-800 — primary dark
-  const slate700  = [51, 65, 85];
-  const slate900  = [15, 23, 42];
-  const slate600  = [71, 85, 105];
-  const slate400  = [148, 163, 184];
-  const slate200  = [226, 232, 240];
-  const slate100  = [241, 245, 249];
-  const slate50   = [248, 250, 252];
-  const white     = [255, 255, 255];
+  // Palette
+  const black    = [0, 0, 0];
+  const charcoal = [30, 41, 59];
+  const slate700 = [51, 65, 85];
+  const slate900 = [15, 23, 42];
+  const slate600 = [71, 85, 105];
+  const slate400 = [148, 163, 184];
+  const slate200 = [226, 232, 240];
+  const slate50  = [248, 250, 252];
+  const white    = [255, 255, 255];
 
   // Muted status colours (text only — used for tinted badges)
   const statusTextColors = {
@@ -370,61 +370,97 @@ async function generatePDF(entries, filters, project) {
 
   let page = 1;
   let y = MARGIN;
-
-  const newPage = () => {
-    doc.addPage();
-    page++;
-    y = MARGIN;
-    addPageFooter();
-  };
-
-  const checkY = (needed = 20) => {
-    if (y + needed > PAGE_H - 20) newPage();
-  };
+  const pagesWithFooter = new Set();
 
   const addPageFooter = () => {
-    doc.setFontSize(8);
+    const p = doc.internal.getCurrentPageInfo().pageNumber;
+    if (pagesWithFooter.has(p)) return;
+    pagesWithFooter.add(p);
+    doc.setFontSize(7.5);
     doc.setTextColor(...slate400);
-    doc.text(`${sanitizeHtml(project.name || 'Environmental Monitoring')} — Page ${page}`, MARGIN, PAGE_H - 8);
-    doc.text(`Generated ${new Date().toLocaleString('en-AU')}`, PAGE_W - MARGIN, PAGE_H - 8, { align: 'right' });
+    doc.text(`${sanitizeHtml(project.name || 'Environmental Monitoring')} — Page ${p}`, MARGIN, PAGE_H - 7);
+    doc.text(`Generated ${new Date().toLocaleString('en-AU')}`, PAGE_W - MARGIN, PAGE_H - 7, { align: 'right' });
     doc.setTextColor(...slate900);
   };
 
+  const newPage = () => {
+    addPageFooter();   // footer on current page before turning
+    doc.addPage();
+    page++;
+    y = MARGIN;
+  };
+
+  const checkY = (needed = 20) => {
+    // Cap so a single block never infinitely loops
+    if (y + Math.min(needed, PAGE_H - MARGIN * 3) > PAGE_H - 22) newPage();
+  };
+
+  // Helper: render multi-line text with automatic page breaks
+  const renderText = (lines, x, lineH = 4.5) => {
+    let i = 0;
+    while (i < lines.length) {
+      const avail = Math.max(1, Math.floor((PAGE_H - 22 - y) / lineH));
+      const chunk = lines.slice(i, i + avail);
+      doc.text(chunk, x, y);
+      y += chunk.length * lineH;
+      i += chunk.length;
+      if (i < lines.length) newPage();
+    }
+  };
+
+  // ── Pre-fetch static map images ──
+  const mapImages = {};
+  if (filters.includeMaps) {
+    const withLoc = entries.filter(e => e.location?.lat);
+    for (const e of withLoc) {
+      try {
+        const mapUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${e.location.lat},${e.location.lng}&zoom=16&size=400x200&markers=${e.location.lat},${e.location.lng},red-pushpin`;
+        const resp = await fetch(mapUrl, { signal: AbortSignal.timeout(6000) });
+        if (resp.ok) {
+          const blob = await resp.blob();
+          mapImages[e.id] = await new Promise(res => {
+            const reader = new FileReader();
+            reader.onloadend = () => res(reader.result);
+            reader.readAsDataURL(blob);
+          });
+        }
+      } catch { /* offline or timeout — skip map */ }
+    }
+  }
+
   // ── Cover Page ──
-  // Muted charcoal header bar
-  doc.setFillColor(...charcoal);
-  doc.rect(0, 0, PAGE_W, 52, 'F');
+  const reportTitle = project.reportTitle || 'Environmental Monitoring Report';
+  const reportSubtitle = project.reportSubtitle || 'Construction Site Environmental Inspection';
 
-  // Subtle accent line beneath header
-  doc.setFillColor(71, 85, 105);
-  doc.rect(0, 52, PAGE_W, 1.5, 'F');
+  // Black header — 26mm (50% of original 52mm)
+  doc.setFillColor(...black);
+  doc.rect(0, 0, PAGE_W, 26, 'F');
 
-  // Logo (if available)
+  // Logo (scaled to fit in 26mm header)
   if (project.logo) {
     try {
       const ext = project.logo.includes('png') ? 'PNG' : 'JPEG';
-      doc.addImage(project.logo, ext, MARGIN, 10, 28, 28);
+      doc.addImage(project.logo, ext, MARGIN, 5, 16, 16);
     } catch {}
   }
 
   doc.setTextColor(...white);
-  doc.setFontSize(20);
+  doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  const titleX = project.logo ? MARGIN + 34 : MARGIN;
-  doc.text('Environmental Monitoring Report', titleX, 24);
-  doc.setFontSize(10);
+  const titleX = project.logo ? MARGIN + 20 : MARGIN;
+  doc.text(reportTitle, titleX, 14);
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(203, 213, 225);  // slate-300
-  doc.text('Construction Site Environmental Inspection', titleX, 34);
+  doc.setTextColor(148, 163, 184);  // slate-400
+  doc.text(reportSubtitle, titleX, 22);
 
-  y = 68;
   doc.setTextColor(...slate900);
 
   // Project details box — clean white card with subtle border
   doc.setFillColor(...white);
   doc.setDrawColor(...slate200);
   doc.setLineWidth(0.3);
-  doc.roundedRect(MARGIN, y, CONTENT_W, 68, 3, 3, 'FD');
+  doc.roundedRect(MARGIN, y, CONTENT_W, 62, 3, 3, 'FD');
 
   const details = [
     ['Project', project.name || '—'],
@@ -441,7 +477,7 @@ async function generatePDF(entries, filters, project) {
   let detY = y + 9;
 
   details.forEach(([label, value]) => {
-    if (detY > y + 63) return;
+    if (detY > y + 57) return;
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...slate400);
@@ -449,10 +485,10 @@ async function generatePDF(entries, filters, project) {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...slate700);
     doc.text(String(value).slice(0, 60), col2X, detY);
-    detY += 8.5;
+    detY += 8;
   });
 
-  y += 76;
+  y += 70;
 
   // Report period — muted pill boxes
   doc.setFillColor(...slate50);
@@ -555,7 +591,7 @@ async function generatePDF(entries, filters, project) {
         }
       }
     },
-    didDrawPage: () => { addPageFooter(); page = doc.internal.getCurrentPageInfo().pageNumber; },
+    didDrawPage: (data) => { page = data.pageNumber; addPageFooter(); },
   });
 
   y = doc.lastAutoTable.finalY + 10;
@@ -627,16 +663,15 @@ async function generatePDF(entries, filters, project) {
 
       y += 17;
 
-      // Description
+      // Description — full text with automatic page breaks
       if (entry.description) {
-        checkY(10);
+        checkY(8);
         doc.setTextColor(...slate900);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         const lines = doc.splitTextToSize(entry.description, CONTENT_W);
-        const maxLines = Math.min(lines.length, 8);
-        doc.text(lines.slice(0, maxLines), MARGIN, y);
-        y += maxLines * 4.5 + 3;
+        renderText(lines, MARGIN, 4.5);
+        y += 4;
       }
 
       // Weather/conditions row
@@ -648,43 +683,54 @@ async function generatePDF(entries, filters, project) {
           entry.windDirection ? `Wind: ${entry.windDirection}` : null,
         ].filter(Boolean).join('  ·  ');
         doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate600);
         doc.text(`Conditions: ${conditions}`, MARGIN, y);
         y += 6;
       }
 
-      // Location
+      // Location — map image + coordinates
       if (filters.includeMaps && entry.location?.lat) {
+        const mapImg = mapImages[entry.id];
+        if (mapImg) {
+          checkY(44);
+          try {
+            doc.addImage(mapImg, 'PNG', MARGIN, y, CONTENT_W, 40, undefined, 'MEDIUM');
+            y += 42;
+          } catch { /* skip broken image */ }
+        }
         checkY(8);
         doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate600);
-        doc.text(`📍 ${entry.location.lat.toFixed(6)}, ${entry.location.lng.toFixed(6)}${entry.location.address ? `  — ${entry.location.address}` : ''}`, MARGIN, y);
+        const coordText = `${entry.location.lat.toFixed(6)}, ${entry.location.lng.toFixed(6)}${entry.location.address ? `  —  ${entry.location.address}` : ''}`;
+        doc.text(coordText, MARGIN, y);
         y += 6;
       }
 
-      // Corrective actions
+      // Corrective actions — full text, dynamically sized
       if (filters.includeCorrective && entry.correctiveActions) {
-        checkY(14);
-        doc.setFillColor(255, 248, 231);
-        doc.roundedRect(MARGIN, y, CONTENT_W, 12, 1, 1, 'F');
-        doc.setTextColor(180, 100, 0);
-        doc.setFontSize(7.5);
+        checkY(16);
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
-        doc.text('CORRECTIVE ACTION REQUIRED', MARGIN + 3, y + 4.5);
+        doc.setTextColor(146, 64, 14);
+        doc.text('CORRECTIVE ACTION REQUIRED', MARGIN, y);
+        y += 5;
+        doc.setFontSize(8.5);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...slate900);
-        const caLines = doc.splitTextToSize(entry.correctiveActions, CONTENT_W - 6);
-        doc.text(caLines.slice(0, 1), MARGIN + 3, y + 9);
-        y += 15;
+        doc.setTextColor(...slate700);
+        const caLines = doc.splitTextToSize(entry.correctiveActions, CONTENT_W - 4);
+        renderText(caLines, MARGIN + 2, 4.5);
+        y += 4;
       }
 
-      // Photos (max 4 per entry)
+      // Photos with captions (max 4 per entry)
       if (filters.includePhotos && entry.photos?.length > 0) {
         const photosToShow = entry.photos.filter(p => !p.startsWith('data:video')).slice(0, 4);
         if (photosToShow.length > 0) {
-          checkY(45);
           const imgW = (CONTENT_W - (photosToShow.length - 1) * 3) / photosToShow.length;
-          const imgH = Math.min(45, imgW * 0.75);
+          const imgH = Math.min(50, imgW * 0.75);
+          checkY(imgH + 6);
 
           for (let pi = 0; pi < photosToShow.length; pi++) {
             try {
@@ -693,23 +739,42 @@ async function generatePDF(entries, filters, project) {
               doc.addImage(src, ext, MARGIN + pi * (imgW + 3), y, imgW, imgH, undefined, 'MEDIUM');
             } catch {}
           }
-          y += imgH + 4;
+          y += imgH + 3;
+
+          // Captions below photos
+          const captions = entry.photoCaptions || [];
+          const hasCaptions = captions.some(c => c && c.trim());
+          if (hasCaptions) {
+            for (let pi = 0; pi < photosToShow.length; pi++) {
+              const cap = (captions[pi] || '').trim();
+              if (!cap) continue;
+              doc.setFontSize(7);
+              doc.setFont('helvetica', 'italic');
+              doc.setTextColor(...slate400);
+              const capLines = doc.splitTextToSize(cap, imgW - 2);
+              capLines.forEach((line, li) => {
+                doc.text(line, MARGIN + pi * (imgW + 3) + 1, y + li * 3.8);
+              });
+            }
+            y += 8;
+          }
+          y += 2;
         }
       }
 
       // Follow-up
       if (entry.followUpRequired) {
         checkY(8);
-        doc.setTextColor(180, 100, 0);
+        doc.setTextColor(146, 64, 14);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'bold');
-        doc.text(`⚠ Follow-up required${entry.followUpDate ? ` by ${formatDateShort(entry.followUpDate)}` : ''}`, MARGIN, y);
+        doc.text(`Follow-up required${entry.followUpDate ? ` by ${formatDateShort(entry.followUpDate)}` : ''}`, MARGIN, y);
         y += 6;
       }
 
       // Tags
       if (entry.tags?.length > 0) {
-        checkY(8);
+        checkY(7);
         doc.setFontSize(7.5);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate400);
@@ -717,11 +782,11 @@ async function generatePDF(entries, filters, project) {
         y += 5;
       }
 
-      y += 6;
+      y += 5;
 
       // Separator
-      doc.setDrawColor(...slate100);
-      doc.setLineWidth(0.4);
+      doc.setDrawColor(...slate200);
+      doc.setLineWidth(0.3);
       doc.line(MARGIN, y - 2, PAGE_W - MARGIN, y - 2);
     }
   }
@@ -751,7 +816,7 @@ async function generatePDF(entries, filters, project) {
       styles: { fontSize: 8, cellPadding: 3, textColor: slate700 },
       headStyles: { fillColor: charcoal, textColor: white, fontStyle: 'bold', fontSize: 7.5 },
       alternateRowStyles: { fillColor: slate50 },
-      didDrawPage: () => addPageFooter(),
+      didDrawPage: (data) => { page = data.pageNumber; addPageFooter(); },
     });
   }
 
@@ -807,7 +872,10 @@ function generateHTML(entries, filters, project) {
   .entry-body { padding: 14px 16px 16px; }
   .description { font-size: 13.5px; color: #334155; line-height: 1.65; margin-bottom: 14px; white-space: pre-wrap; }
   .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px; }
-  .photos img { width: 100%; border-radius: 6px; object-fit: cover; aspect-ratio: 4/3; }
+  .photo-item { display: flex; flex-direction: column; gap: 4px; }
+  .photos img { width: 100%; border-radius: 6px; object-fit: cover; aspect-ratio: 4/3; display: block; }
+  .photo-caption { font-size: 11px; color: #64748b; line-height: 1.4; word-break: break-word; }
+  .map-snapshot { width: 100%; max-width: 400px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 10px; display: block; }
   .location { font-size: 12px; color: #475569; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
   .corrective { background: #fffbeb; border: 1px solid #fde68a; border-left: 3px solid #b45309; padding: 10px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; color: #334155; }
   .corrective strong { display: block; color: #b45309; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 700; }
@@ -828,8 +896,8 @@ function generateHTML(entries, filters, project) {
 
 <div class="cover">
   ${project.logo ? `<img src="${project.logo}" style="height:52px;margin-bottom:20px;border-radius:4px;opacity:0.9" alt="Logo">` : ''}
-  <h1>Environmental Monitoring Report</h1>
-  <div class="subtitle">${sanitizeHtml(project.name || 'Construction Project')}</div>
+  <h1>${sanitizeHtml(project.reportTitle || 'Environmental Monitoring Report')}</h1>
+  <div class="subtitle">${sanitizeHtml(project.reportSubtitle || project.name || 'Construction Site Environmental Inspection')}</div>
   <div class="project-grid">
     ${[['Project No.', project.number], ['Site Address', project.address], ['Client', project.client], ['Contractor', project.contractor], ['Inspector', project.inspector], ['Approval Ref', project.approvalRef]].filter(([,v]) => v).map(([l,v]) => `
       <div class="project-item"><label>${l}</label><span>${sanitizeHtml(v)}</span></div>
@@ -876,7 +944,11 @@ function generateHTML(entries, filters, project) {
           const type = getType(e.type);
           const status = getStatus(e.status);
           const sc = statusColors[e.status] || { bg: '#f1f5f9', color: '#64748b' };
-          const photos = filters.includePhotos ? (e.photos || []).filter(p => !p.startsWith('data:video')).slice(0, 6) : [];
+          const rawPhotos = filters.includePhotos ? (e.photos || []).filter(p => !p.startsWith('data:video')).slice(0, 6) : [];
+          const captions = e.photoCaptions || [];
+          const mapUrl = filters.includeMaps && e.location?.lat
+            ? `https://staticmap.openstreetmap.de/staticmap.php?center=${e.location.lat},${e.location.lng}&zoom=16&size=400x200&markers=${e.location.lat},${e.location.lng},red-pushpin`
+            : null;
           return `
             <div class="entry-card">
               <div class="entry-header">
@@ -895,7 +967,8 @@ function generateHTML(entries, filters, project) {
               </div>
               <div class="entry-body">
                 ${e.description ? `<div class="description">${sanitizeHtml(e.description)}</div>` : ''}
-                ${photos.length > 0 ? `<div class="photos">${photos.map(src => `<img src="${src}" alt="Photo">`).join('')}</div>` : ''}
+                ${rawPhotos.length > 0 ? `<div class="photos">${rawPhotos.map((src, i) => `<div class="photo-item"><img src="${src}" alt="Photo">${captions[i] ? `<div class="photo-caption">${sanitizeHtml(captions[i])}</div>` : ''}</div>`).join('')}</div>` : ''}
+                ${mapUrl ? `<img class="map-snapshot" src="${mapUrl}" alt="Map" loading="lazy">` : ''}
                 ${filters.includeMaps && e.location?.lat ? `<div class="location">📍 ${e.location.lat.toFixed(6)}, ${e.location.lng.toFixed(6)}${e.location.address ? ` — ${sanitizeHtml(e.location.address)}` : ''}</div>` : ''}
                 ${filters.includeCorrective && e.correctiveActions ? `<div class="corrective"><strong>⚠ Corrective Action Required</strong>${sanitizeHtml(e.correctiveActions)}</div>` : ''}
                 ${e.followUpRequired ? `<div style="margin-bottom:8px"><span class="followup">⏰ Follow-up${e.followUpDate ? ' by ' + formatDateShort(e.followUpDate) : ' Required'}</span></div>` : ''}

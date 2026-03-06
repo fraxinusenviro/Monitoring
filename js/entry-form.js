@@ -124,14 +124,14 @@ export async function renderEntryForm(entryId, project, navigate) {
         <div class="form-section">
           <div class="form-section-header">Photos</div>
           <div class="form-section-body">
-            <div class="media-grid" id="photos-grid"></div>
+            <div class="photo-grid" id="photos-grid"></div>
             <div class="media-buttons-row">
               <button type="button" class="btn btn-secondary btn-sm" id="photo-camera-btn">${icon('camera')} Camera</button>
               <button type="button" class="btn btn-secondary btn-sm" id="photo-upload-btn">${icon('layers')} Upload</button>
             </div>
             <input type="file" id="photo-camera-input" accept="image/*" capture="environment" hidden multiple>
             <input type="file" id="photo-file-input" accept="image/*" hidden multiple>
-            <p class="help-text" style="margin-top:6px">JPEG, PNG, HEIC. Each file max 10MB.</p>
+            <p class="help-text" style="margin-top:6px">JPEG, PNG, HEIC. Each file max 10MB. Add an optional caption to each photo.</p>
           </div>
         </div>
 
@@ -225,12 +225,13 @@ export async function renderEntryForm(entryId, project, navigate) {
 
   // State for media and form
   const formState = {
-    photos:   isEdit ? [...(entry.photos || [])] : [],
-    videos:   isEdit ? [...(entry.videos || [])] : [],
-    tags:     isEdit ? [...(entry.tags || [])] : [],
-    type:     isEdit ? entry.type : null,
-    status:   isEdit ? entry.status : null,
-    location: isEdit ? (entry.location || null) : null,
+    photos:        isEdit ? [...(entry.photos || [])] : [],
+    photoCaptions: isEdit ? [...(entry.photoCaptions || [])] : [],
+    videos:        isEdit ? [...(entry.videos || [])] : [],
+    tags:          isEdit ? [...(entry.tags || [])] : [],
+    type:          isEdit ? entry.type : null,
+    status:        isEdit ? entry.status : null,
+    location:      isEdit ? (entry.location || null) : null,
   };
 
   // ── Type Grid ──
@@ -307,11 +308,11 @@ export async function renderEntryForm(entryId, project, navigate) {
   });
 
   // ── Photo handlers ──
-  setupMediaHandlers('photo', formState, 'photos');
+  setupPhotoHandlers(formState);
   setupMediaHandlers('video', formState, 'videos');
 
   // Render existing media
-  renderMediaGrid('photos-grid', formState.photos, 'photo');
+  renderPhotoGrid('photos-grid', formState.photos, formState.photoCaptions);
   renderMediaGrid('videos-grid', formState.videos, 'video');
 
   // ── Tags ──
@@ -394,6 +395,86 @@ export async function renderEntryForm(entryId, project, navigate) {
 
   document.getElementById('form-save-btn')?.addEventListener('click', saveHandler);
   document.getElementById('entry-form')?.addEventListener('submit', saveHandler);
+}
+
+// ── Photo Handlers (with caption support) ─────────────────
+
+function setupPhotoHandlers(formState) {
+  const cameraInput = document.getElementById('photo-camera-input');
+  const fileInput = document.getElementById('photo-file-input');
+  const cameraBtn = document.getElementById('photo-camera-btn');
+  const uploadBtn = document.getElementById('photo-upload-btn');
+
+  cameraBtn?.addEventListener('click', () => cameraInput?.click());
+  uploadBtn?.addEventListener('click', () => fileInput?.click());
+
+  const handleFiles = async (files) => {
+    for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) { toast(`${file.name} exceeds 10MB limit`, 'error'); continue; }
+      try {
+        const b64 = await fileToBase64(file);
+        formState.photos.push(b64);
+        formState.photoCaptions.push('');
+        renderPhotoGrid('photos-grid', formState.photos, formState.photoCaptions);
+      } catch { toast(`Failed to load ${file.name}`, 'error'); }
+    }
+  };
+
+  cameraInput?.addEventListener('change', async (e) => {
+    await handleFiles(Array.from(e.target.files || []));
+    e.target.value = '';
+  });
+  fileInput?.addEventListener('change', async (e) => {
+    await handleFiles(Array.from(e.target.files || []));
+    e.target.value = '';
+  });
+}
+
+function renderPhotoGrid(gridId, photos, captions) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  photos.forEach((src, idx) => {
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+
+    item.innerHTML = `
+      <div class="media-thumb-wrapper">
+        <img src="${src}" alt="Photo ${idx + 1}" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius)">
+        <button class="media-remove-btn" data-idx="${idx}" type="button">${icon('x')}</button>
+      </div>
+      <textarea class="photo-caption-input" placeholder="Caption (optional)…" rows="2">${sanitizeHtml(captions[idx] || '')}</textarea>
+    `;
+
+    // Preview on click
+    item.querySelector('.media-thumb-wrapper').addEventListener('click', e => {
+      if (e.target.closest('.media-remove-btn')) return;
+      import('./utils.js').then(m => m.openLightbox(src, captions[idx] || `Photo ${idx + 1}`));
+    });
+
+    // Remove
+    item.querySelector('.media-remove-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      photos.splice(idx, 1);
+      captions.splice(idx, 1);
+      renderPhotoGrid(gridId, photos, captions);
+    });
+
+    // Caption update
+    item.querySelector('.photo-caption-input').addEventListener('input', e => {
+      captions[idx] = e.target.value;
+    });
+
+    grid.appendChild(item);
+  });
+
+  // Add button
+  const addBtn = document.createElement('div');
+  addBtn.className = 'media-add-btn';
+  addBtn.innerHTML = `${icon('plus')}<span>Add</span>`;
+  addBtn.addEventListener('click', () => document.getElementById('photo-file-input')?.click());
+  grid.appendChild(addBtn);
 }
 
 // ── Media Handlers ────────────────────────────────────────
@@ -619,6 +700,7 @@ async function saveEntryForm(existingEntry, formState, isEdit, project, navigate
     temperature:      parseFloat(document.getElementById('f-temp')?.value) || null,
     windDirection:    document.getElementById('f-wind')?.value || '',
     photos:           formState.photos,
+    photoCaptions:    formState.photoCaptions,
     videos:           formState.videos,
     location:         formState.location,
     correctiveActions: document.getElementById('f-corrective')?.value?.trim() || '',

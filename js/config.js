@@ -229,4 +229,6 @@ export const DEFAULT_PROJECT = {
   inspector: '',
   approvalRef: '',
   logo: null,
+  reportTitle: 'Environmental Monitoring Report',
+  reportSubtitle: 'Construction Site Environmental Inspection',
 };

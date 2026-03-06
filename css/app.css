@@ -1279,3 +1279,22 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 .cat-prompt-input:focus { border-color: var(--blue-400, #60a5fa); }
 .cat-prompt-remove { color: var(--slate-300); padding: 4px; }
 .cat-prompt-remove:hover { color: var(--red-600); }
+
+/* ── Photo grid with captions ────────────────────────────── */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--space-3); }
+.photo-item { display: flex; flex-direction: column; gap: 5px; }
+.photo-caption-input {
+  width: 100%;
+  font-size: 11.5px;
+  font-family: inherit;
+  padding: 4px 7px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--slate-600);
+  resize: none;
+  min-height: 38px;
+  line-height: 1.4;
+  transition: border-color var(--transition-fast);
+}
+.photo-caption-input:focus { border-color: var(--blue-400, #60a5fa); outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
