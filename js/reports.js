@@ -456,6 +456,9 @@ async function generatePDF(entries, filters, project) {
 
   doc.setTextColor(...slate900);
 
+  // Push y below the black header so the project box doesn't overlap
+  y = 30;
+
   // Project details box — clean white card with subtle border
   doc.setFillColor(...white);
   doc.setDrawColor(...slate200);
@@ -724,28 +727,49 @@ async function generatePDF(entries, filters, project) {
         y += 4;
       }
 
-      // Photos with captions (max 4 per entry)
+      // Photos with captions — max 2 columns, correct aspect ratio per photo
       if (filters.includePhotos && entry.photos?.length > 0) {
-        const photosToShow = entry.photos.filter(p => !p.startsWith('data:video')).slice(0, 4);
+        const photosToShow = entry.photos.filter(p => !p.startsWith('data:video')).slice(0, 6);
         if (photosToShow.length > 0) {
-          const imgW = (CONTENT_W - (photosToShow.length - 1) * 3) / photosToShow.length;
-          const imgH = Math.min(50, imgW * 0.75);
-          checkY(imgH + 6);
-
-          for (let pi = 0; pi < photosToShow.length; pi++) {
-            try {
-              const src = photosToShow[pi];
-              const ext = src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-              doc.addImage(src, ext, MARGIN + pi * (imgW + 3), y, imgW, imgH, undefined, 'MEDIUM');
-            } catch {}
-          }
-          y += imgH + 3;
-
-          // Captions below photos
+          const COLS = 2;
+          const GAP = 4;
+          const imgW = (CONTENT_W - GAP * (COLS - 1)) / COLS;
           const captions = entry.photoCaptions || [];
-          const hasCaptions = captions.some(c => c && c.trim());
-          if (hasCaptions) {
-            for (let pi = 0; pi < photosToShow.length; pi++) {
+          const numRows = Math.ceil(photosToShow.length / COLS);
+
+          for (let row = 0; row < numRows; row++) {
+            const rowPhotos = photosToShow.slice(row * COLS, row * COLS + COLS);
+
+            // Determine height for each photo using its real aspect ratio
+            const rowHeights = rowPhotos.map(src => {
+              try {
+                const props = doc.getImageProperties(src);
+                const aspect = props.height / props.width;
+                return Math.min(130, Math.max(25, imgW * aspect));
+              } catch {
+                return imgW * 0.75;
+              }
+            });
+            const rowH = Math.max(...rowHeights);
+
+            checkY(rowH + 6);
+
+            for (let col = 0; col < rowPhotos.length; col++) {
+              try {
+                const src = rowPhotos[col];
+                const ext = src.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+                const photoH = rowHeights[col];
+                const xPos = MARGIN + col * (imgW + GAP);
+                const yOff = (rowH - photoH) / 2; // vertically centre within row
+                doc.addImage(src, ext, xPos, y + yOff, imgW, photoH, undefined, 'MEDIUM');
+              } catch {}
+            }
+            y += rowH + 3;
+
+            // Captions for this row
+            let maxCapLines = 0;
+            for (let col = 0; col < rowPhotos.length; col++) {
+              const pi = row * COLS + col;
               const cap = (captions[pi] || '').trim();
               if (!cap) continue;
               doc.setFontSize(7);
@@ -753,12 +777,14 @@ async function generatePDF(entries, filters, project) {
               doc.setTextColor(...slate400);
               const capLines = doc.splitTextToSize(cap, imgW - 2);
               capLines.forEach((line, li) => {
-                doc.text(line, MARGIN + pi * (imgW + 3) + 1, y + li * 3.8);
+                doc.text(line, MARGIN + col * (imgW + GAP) + 1, y + li * 3.8);
               });
+              maxCapLines = Math.max(maxCapLines, capLines.length);
             }
-            y += 8;
+            if (maxCapLines > 0) y += maxCapLines * 3.8 + 2;
+
+            y += 2;
           }
-          y += 2;
         }
       }
 
