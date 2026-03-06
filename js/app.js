@@ -15,7 +15,33 @@ import { renderReports } from './reports.js';
 const App = {
   currentView: null,
   project: { ...DEFAULT_PROJECT },
+  categorySettings: {},   // { [typeId]: { visible: boolean, prompts: string[]|null } }
 };
+
+// ── Category Settings Helpers ─────────────────────────────
+
+function getDefaultCategorySettings() {
+  const s = {};
+  OBSERVATION_TYPES.forEach(t => { s[t.id] = { visible: true, prompts: null }; });
+  return s;
+}
+
+function applyCategorySettings() {
+  OBSERVATION_TYPES.forEach(type => {
+    const cs = App.categorySettings[type.id];
+    if (cs?.prompts && Array.isArray(cs.prompts) && cs.prompts.length > 0) {
+      type.prompts = cs.prompts;
+    } else {
+      type.prompts = [...type._defaultPrompts];
+    }
+  });
+}
+
+function isCategoryVisible(typeId) {
+  const cs = App.categorySettings[typeId];
+  if (!cs) return true;        // default: visible
+  return cs.visible !== false;
+}
 
 // ── Boot ─────────────────────────────────────────────────
 
@@ -30,6 +56,17 @@ async function boot() {
     ...DEFAULT_PROJECT,
     ...(await getSetting('project', {})),
   };
+
+  // Load category settings
+  const saved = await getSetting('categorySettings', null);
+  const defaults = getDefaultCategorySettings();
+  if (saved) {
+    // Merge saved with defaults (handles new categories added after user saved)
+    App.categorySettings = { ...defaults, ...saved };
+  } else {
+    App.categorySettings = defaults;
+  }
+  applyCategorySettings();
 
   updateSidebarProject();
   setupNavigation();
@@ -121,6 +158,9 @@ async function renderDashboard({ container }) {
   OBSERVATION_TYPES.forEach(t => { typeCount[t.id] = 0; });
   allEntries.forEach(e => { if (typeCount[e.type] !== undefined) typeCount[e.type]++; });
 
+  // Filter visible categories
+  const visibleTypes = OBSERVATION_TYPES.filter(t => isCategoryVisible(t.id));
+
   container.innerHTML = `
     <div class="page-header">
       <div>
@@ -167,7 +207,11 @@ async function renderDashboard({ container }) {
       </div>
 
       <div class="dashboard-section-title">Quick Log by Category</div>
-      <div class="quick-types-grid" id="quick-types"></div>
+      ${visibleTypes.length === 0 ? `
+        <div style="color:var(--slate-400);font-size:13px;margin-bottom:24px;padding:16px;background:white;border:1px solid var(--color-border);border-radius:var(--radius-lg)">
+          No categories are active. Enable categories in <a href="#settings" style="color:var(--blue-600)">Settings</a>.
+        </div>
+      ` : `<div class="quick-types-grid" id="quick-types"></div>`}
 
       <div class="dashboard-section-title" style="margin-top:8px">
         Today's Entries
@@ -180,27 +224,29 @@ async function renderDashboard({ container }) {
 
   // Quick type buttons
   const quickGrid = document.getElementById('quick-types');
-  OBSERVATION_TYPES.forEach(type => {
-    const card = document.createElement('div');
-    card.className = 'quick-type-card';
-    const count = typeCount[type.id] || 0;
-    card.innerHTML = `
-      <div class="quick-type-dot" style="background:${type.color}"></div>
-      <div style="flex:1;min-width:0">
-        <div class="quick-type-label">${sanitizeHtml(type.label)}</div>
-        ${count > 0 ? `<div style="font-size:11px;color:var(--slate-400)">${count} total</div>` : ''}
-      </div>
-    `;
-    card.addEventListener('click', () => {
-      navigate('new-entry');
-      // Pre-select type after form renders
-      setTimeout(() => {
-        const chip = document.querySelector(`.type-chip[data-type="${type.id}"]`);
-        chip?.click();
-      }, 100);
+  if (quickGrid) {
+    visibleTypes.forEach(type => {
+      const card = document.createElement('div');
+      card.className = 'quick-type-card';
+      const count = typeCount[type.id] || 0;
+      card.innerHTML = `
+        <div class="quick-type-dot" style="background:${type.color}"></div>
+        <div style="flex:1;min-width:0">
+          <div class="quick-type-label">${sanitizeHtml(type.label)}</div>
+          ${count > 0 ? `<div style="font-size:11px;color:var(--slate-400)">${count} total</div>` : ''}
+        </div>
+      `;
+      card.addEventListener('click', () => {
+        navigate('new-entry');
+        // Pre-select type after form renders
+        setTimeout(() => {
+          const chip = document.querySelector(`.type-chip[data-type="${type.id}"]`);
+          chip?.click();
+        }, 100);
+      });
+      quickGrid.appendChild(card);
     });
-    quickGrid.appendChild(card);
-  });
+  }
 
   // Today's entries
   const todayContainer = document.getElementById('today-entries');
@@ -301,6 +347,16 @@ async function renderSettings({ container }) {
           </div>
         </div>
 
+        <div class="card" id="category-settings-card">
+          <div class="card-header">
+            <span class="card-title">Dashboard Categories</span>
+            <span style="font-size:12px;color:var(--slate-400)">Toggle visibility &amp; edit checklists</span>
+          </div>
+          <div class="card-body" style="padding:0">
+            <div id="category-settings-list"></div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-header"><span class="card-title">Data Management</span></div>
           <div class="card-body">
@@ -319,6 +375,9 @@ async function renderSettings({ container }) {
       </div>
     </div>
   `;
+
+  // ── Build category settings list ──
+  buildCategorySettingsList();
 
   // Logo upload
   const logoInput = document.getElementById('logo-file-input');
@@ -355,6 +414,11 @@ async function renderSettings({ container }) {
       approvalRef: document.getElementById('set-approval').value.trim(),
     };
     await setSetting('project', App.project);
+
+    // Save category settings
+    await setSetting('categorySettings', App.categorySettings);
+    applyCategorySettings();
+
     updateSidebarProject();
     toast('Settings saved', 'success');
   });
@@ -380,6 +444,8 @@ async function renderSettings({ container }) {
         tx.objectStore('entries').clear();
         tx.objectStore('settings').clear();
         App.project = { ...DEFAULT_PROJECT };
+        App.categorySettings = getDefaultCategorySettings();
+        applyCategorySettings();
         updateSidebarProject();
         toast('All data cleared', 'warning');
         navigate('dashboard');
@@ -388,6 +454,142 @@ async function renderSettings({ container }) {
       'btn-danger'
     );
   });
+}
+
+// ── Category Settings List Builder ────────────────────────
+
+function buildCategorySettingsList() {
+  const list = document.getElementById('category-settings-list');
+  if (!list) return;
+
+  list.innerHTML = '';
+
+  OBSERVATION_TYPES.forEach((type, idx) => {
+    const cs = App.categorySettings[type.id] || { visible: true, prompts: null };
+    const effectivePrompts = (cs.prompts && cs.prompts.length > 0) ? cs.prompts : [...type._defaultPrompts];
+    const isVisible = cs.visible !== false;
+    const isLast = idx === OBSERVATION_TYPES.length - 1;
+
+    const row = document.createElement('div');
+    row.className = 'cat-setting-row';
+    row.style.cssText = `border-bottom:${isLast ? 'none' : '1px solid var(--slate-100)'}`;
+
+    row.innerHTML = `
+      <div class="cat-row-header">
+        <label class="cat-toggle" title="${isVisible ? 'Shown on dashboard' : 'Hidden from dashboard'}">
+          <input type="checkbox" class="cat-visibility-check" data-type="${type.id}" ${isVisible ? 'checked' : ''}>
+          <span class="cat-toggle-track"></span>
+        </label>
+        <span class="cat-color-dot" style="background:${type.color}"></span>
+        <span class="cat-name" style="${isVisible ? '' : 'opacity:0.45;text-decoration:line-through'}">${sanitizeHtml(type.label)}</span>
+        <button class="btn btn-ghost btn-sm cat-edit-btn" data-type="${type.id}" style="margin-left:auto;font-size:12px">
+          Edit Checklist
+        </button>
+      </div>
+      <div class="cat-checklist-panel" id="cat-panel-${type.id}" style="display:none">
+        <div class="cat-prompts-list" id="cat-prompts-${type.id}">
+          ${effectivePrompts.map((p, i) => `
+            <div class="cat-prompt-row" data-idx="${i}">
+              <input type="text" class="cat-prompt-input" value="${sanitizeHtml(p)}" placeholder="Checklist item…">
+              <button class="cat-prompt-remove btn btn-ghost btn-sm" title="Remove item">${icon('x')}</button>
+            </div>
+          `).join('')}
+        </div>
+        <div style="display:flex;gap:8px;padding:8px 16px 12px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm cat-add-prompt-btn" data-type="${type.id}">
+            ${icon('plus')} Add Item
+          </button>
+          <button class="btn btn-ghost btn-sm cat-reset-prompts-btn" data-type="${type.id}" style="color:var(--slate-400)">
+            Reset to Defaults
+          </button>
+        </div>
+      </div>
+    `;
+
+    list.appendChild(row);
+
+    // Visibility toggle
+    const check = row.querySelector('.cat-visibility-check');
+    check.addEventListener('change', () => {
+      if (!App.categorySettings[type.id]) App.categorySettings[type.id] = { visible: true, prompts: null };
+      App.categorySettings[type.id].visible = check.checked;
+      const nameEl = row.querySelector('.cat-name');
+      nameEl.style.opacity = check.checked ? '' : '0.45';
+      nameEl.style.textDecoration = check.checked ? '' : 'line-through';
+    });
+
+    // Edit checklist toggle
+    const editBtn = row.querySelector('.cat-edit-btn');
+    const panel = row.querySelector(`#cat-panel-${type.id}`);
+    editBtn.addEventListener('click', () => {
+      const isOpen = panel.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : 'block';
+      editBtn.textContent = isOpen ? 'Edit Checklist' : 'Done';
+    });
+
+    // Add prompt
+    const addBtn = row.querySelector('.cat-add-prompt-btn');
+    addBtn.addEventListener('click', () => {
+      const promptsList = row.querySelector(`#cat-prompts-${type.id}`);
+      const newRow = document.createElement('div');
+      newRow.className = 'cat-prompt-row';
+      newRow.innerHTML = `
+        <input type="text" class="cat-prompt-input" value="" placeholder="New checklist item…">
+        <button class="cat-prompt-remove btn btn-ghost btn-sm" title="Remove item">${icon('x')}</button>
+      `;
+      promptsList.appendChild(newRow);
+      newRow.querySelector('input').focus();
+      newRow.querySelector('.cat-prompt-remove').addEventListener('click', () => newRow.remove());
+      savePromptsToState(type.id, row);
+    });
+
+    // Remove prompt handlers
+    row.querySelectorAll('.cat-prompt-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.closest('.cat-prompt-row').remove();
+        savePromptsToState(type.id, row);
+      });
+    });
+
+    // Auto-save on input change
+    row.querySelectorAll('.cat-prompt-input').forEach(input => {
+      input.addEventListener('input', () => savePromptsToState(type.id, row));
+    });
+
+    // Reset to defaults
+    const resetBtn = row.querySelector('.cat-reset-prompts-btn');
+    resetBtn.addEventListener('click', () => {
+      const promptsList = row.querySelector(`#cat-prompts-${type.id}`);
+      promptsList.innerHTML = type._defaultPrompts.map((p, i) => `
+        <div class="cat-prompt-row" data-idx="${i}">
+          <input type="text" class="cat-prompt-input" value="${sanitizeHtml(p)}" placeholder="Checklist item…">
+          <button class="cat-prompt-remove btn btn-ghost btn-sm" title="Remove item">${icon('x')}</button>
+        </div>
+      `).join('');
+
+      // Re-attach remove handlers
+      promptsList.querySelectorAll('.cat-prompt-remove').forEach(btn => {
+        btn.addEventListener('click', () => {
+          btn.closest('.cat-prompt-row').remove();
+          savePromptsToState(type.id, row);
+        });
+      });
+      promptsList.querySelectorAll('.cat-prompt-input').forEach(input => {
+        input.addEventListener('input', () => savePromptsToState(type.id, row));
+      });
+
+      if (!App.categorySettings[type.id]) App.categorySettings[type.id] = { visible: true, prompts: null };
+      App.categorySettings[type.id].prompts = null;
+      toast(`${type.label} checklist reset`, 'success');
+    });
+  });
+}
+
+function savePromptsToState(typeId, rowEl) {
+  const inputs = rowEl.querySelectorAll('.cat-prompt-input');
+  const prompts = [...inputs].map(i => i.value.trim()).filter(Boolean);
+  if (!App.categorySettings[typeId]) App.categorySettings[typeId] = { visible: true, prompts: null };
+  App.categorySettings[typeId].prompts = prompts.length > 0 ? prompts : null;
 }
 
 // ── Entry Card (shared component) ─────────────────────────

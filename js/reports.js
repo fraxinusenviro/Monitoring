@@ -31,7 +31,7 @@ export async function renderReports({ container, navigate }) {
         <div style="display:flex;flex-direction:column;gap:16px">
 
           <div class="card">
-            <div class="card-header"><span class="card-title">${icon('calendar')} Date Range</span></div>
+            <div class="card-header"><span class="card-title report-card-title">${icon('calendar')} Date Range</span></div>
             <div class="card-body">
               <div class="date-range-inputs">
                 <div class="form-group">
@@ -53,7 +53,7 @@ export async function renderReports({ container, navigate }) {
           </div>
 
           <div class="card">
-            <div class="card-header"><span class="card-title">${icon('filter')} Filter by Type</span></div>
+            <div class="card-header"><span class="card-title report-card-title">${icon('filter')} Filter by Type</span></div>
             <div class="card-body">
               <div style="display:flex;flex-direction:column;gap:6px" id="type-checkboxes">
                 <label style="font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px">
@@ -72,13 +72,13 @@ export async function renderReports({ container, navigate }) {
           </div>
 
           <div class="card">
-            <div class="card-header"><span class="card-title">${icon('filter')} Filter by Status</span></div>
+            <div class="card-header"><span class="card-title report-card-title">${icon('filter')} Filter by Status</span></div>
             <div class="card-body">
               <div style="display:flex;flex-direction:column;gap:6px">
                 ${STATUS_TYPES.map(s => `
                   <label style="font-size:13px;font-weight:400;cursor:pointer;display:flex;align-items:center;gap:8px">
                     <input type="checkbox" class="rep-status-check" data-status="${s.id}" checked style="width:auto">
-                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${s.color};flex-shrink:0"></span>
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0"></span>
                     ${sanitizeHtml(s.label)}
                   </label>
                 `).join('')}
@@ -87,7 +87,7 @@ export async function renderReports({ container, navigate }) {
           </div>
 
           <div class="card">
-            <div class="card-header"><span class="card-title">${icon('settings')} Options</span></div>
+            <div class="card-header"><span class="card-title report-card-title">${icon('settings')} Options</span></div>
             <div class="card-body">
               <div style="display:flex;flex-direction:column;gap:8px">
                 <label style="font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px">
@@ -109,21 +109,21 @@ export async function renderReports({ container, navigate }) {
         <div style="display:flex;flex-direction:column;gap:16px">
 
           <div class="card">
-            <div class="card-header"><span class="card-title">${icon('file')} Export Format</span></div>
+            <div class="card-header"><span class="card-title report-card-title">${icon('file')} Export Format</span></div>
             <div class="card-body">
               <div class="format-grid">
                 <div class="format-card selected" data-format="pdf">
-                  <div class="format-icon">📄</div>
+                  <div class="format-icon-sm">PDF</div>
                   <div class="format-label">PDF</div>
                   <div class="format-desc">Professional printable report</div>
                 </div>
                 <div class="format-card" data-format="html">
-                  <div class="format-icon">🌐</div>
+                  <div class="format-icon-sm">HTML</div>
                   <div class="format-label">HTML</div>
                   <div class="format-desc">Shareable web page</div>
                 </div>
                 <div class="format-card" data-format="markdown">
-                  <div class="format-icon">📝</div>
+                  <div class="format-icon-sm">MD</div>
                   <div class="format-label">Markdown</div>
                   <div class="format-desc">Plain text with formatting</div>
                 </div>
@@ -132,7 +132,7 @@ export async function renderReports({ container, navigate }) {
           </div>
 
           <div class="card">
-            <div class="card-header"><span class="card-title">${icon('layers')} Preview</span></div>
+            <div class="card-header"><span class="card-title report-card-title">${icon('layers')} Preview</span></div>
             <div class="card-body">
               <div class="report-preview" id="report-preview">
                 <div style="color:var(--slate-400);font-size:13px;text-align:center;padding:20px 0">
@@ -335,17 +335,37 @@ async function generatePDF(entries, filters, project) {
   const MARGIN = 18;
   const CONTENT_W = PAGE_W - MARGIN * 2;
 
-  const blue = [29, 78, 216];
-  const slate900 = [15, 23, 42];
-  const slate600 = [71, 85, 105];
-  const slate400 = [148, 163, 184];
-  const slate100 = [241, 245, 249];
+  // Muted, elegant palette
+  const charcoal  = [30, 41, 59];   // slate-800 — primary dark
+  const slate700  = [51, 65, 85];
+  const slate900  = [15, 23, 42];
+  const slate600  = [71, 85, 105];
+  const slate400  = [148, 163, 184];
+  const slate200  = [226, 232, 240];
+  const slate100  = [241, 245, 249];
+  const slate50   = [248, 250, 252];
+  const white     = [255, 255, 255];
 
+  // Muted status colours (text only — used for tinted badges)
+  const statusTextColors = {
+    'compliant':     [22, 101, 52],   // green-800
+    'non-compliant': [153, 27, 27],   // red-800
+    'advisory':      [146, 64, 14],   // amber-800
+    'observation':   [30, 64, 175],   // blue-800
+  };
+  const statusBgColors = {
+    'compliant':     [240, 253, 244],  // green-50
+    'non-compliant': [254, 242, 242],  // red-50
+    'advisory':      [255, 251, 235],  // amber-50
+    'observation':   [239, 246, 255],  // blue-50
+  };
+
+  // Keep for backward compat (used in autoTable didParseCell)
   const statusColors = {
-    'compliant':     [22, 163, 74],
-    'non-compliant': [220, 38, 38],
-    'advisory':      [217, 119, 6],
-    'observation':   [37, 99, 235],
+    'compliant':     statusTextColors['compliant'],
+    'non-compliant': statusTextColors['non-compliant'],
+    'advisory':      statusTextColors['advisory'],
+    'observation':   statusTextColors['observation'],
   };
 
   let page = 1;
@@ -371,33 +391,40 @@ async function generatePDF(entries, filters, project) {
   };
 
   // ── Cover Page ──
-  // Header bar
-  doc.setFillColor(...blue);
-  doc.rect(0, 0, PAGE_W, 50, 'F');
+  // Muted charcoal header bar
+  doc.setFillColor(...charcoal);
+  doc.rect(0, 0, PAGE_W, 52, 'F');
+
+  // Subtle accent line beneath header
+  doc.setFillColor(71, 85, 105);
+  doc.rect(0, 52, PAGE_W, 1.5, 'F');
 
   // Logo (if available)
   if (project.logo) {
     try {
       const ext = project.logo.includes('png') ? 'PNG' : 'JPEG';
-      doc.addImage(project.logo, ext, MARGIN, 8, 30, 30);
+      doc.addImage(project.logo, ext, MARGIN, 10, 28, 28);
     } catch {}
   }
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(22);
+  doc.setTextColor(...white);
+  doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  const titleX = project.logo ? MARGIN + 36 : MARGIN;
-  doc.text('Environmental Monitoring Report', titleX, 22);
-  doc.setFontSize(12);
+  const titleX = project.logo ? MARGIN + 34 : MARGIN;
+  doc.text('Environmental Monitoring Report', titleX, 24);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Construction Site Environmental Inspection', titleX, 32);
+  doc.setTextColor(203, 213, 225);  // slate-300
+  doc.text('Construction Site Environmental Inspection', titleX, 34);
 
-  y = 65;
+  y = 68;
   doc.setTextColor(...slate900);
 
-  // Project details box
-  doc.setFillColor(...slate100);
-  doc.roundedRect(MARGIN, y, CONTENT_W, 70, 3, 3, 'F');
+  // Project details box — clean white card with subtle border
+  doc.setFillColor(...white);
+  doc.setDrawColor(...slate200);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(MARGIN, y, CONTENT_W, 68, 3, 3, 'FD');
 
   const details = [
     ['Project', project.name || '—'],
@@ -410,48 +437,53 @@ async function generatePDF(entries, filters, project) {
   ];
 
   const col1X = MARGIN + 5;
-  const col2X = MARGIN + 45;
-  let detY = y + 8;
+  const col2X = MARGIN + 44;
+  let detY = y + 9;
 
   details.forEach(([label, value]) => {
-    if (detY > y + 65) return;
-    doc.setFontSize(8);
+    if (detY > y + 63) return;
+    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...slate600);
+    doc.setTextColor(...slate400);
     doc.text(label.toUpperCase(), col1X, detY);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...slate900);
+    doc.setTextColor(...slate700);
     doc.text(String(value).slice(0, 60), col2X, detY);
-    detY += 9;
+    detY += 8.5;
   });
 
-  y += 78;
+  y += 76;
 
-  // Report period
-  doc.setFillColor(...blue);
-  doc.roundedRect(MARGIN, y, CONTENT_W / 2 - 4, 24, 2, 2, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(8);
+  // Report period — muted pill boxes
+  doc.setFillColor(...slate50);
+  doc.setDrawColor(...slate200);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(MARGIN, y, CONTENT_W / 2 - 4, 22, 2, 2, 'FD');
+  doc.setTextColor(...slate400);
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
   doc.text('REPORT PERIOD', MARGIN + 5, y + 7);
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${formatDateShort(filters.dateFrom)} — ${formatDateShort(filters.dateTo)}`, MARGIN + 5, y + 17);
+  doc.setTextColor(...slate700);
+  doc.text(`${formatDateShort(filters.dateFrom)} — ${formatDateShort(filters.dateTo)}`, MARGIN + 5, y + 16);
 
-  doc.setFillColor(...slate100);
-  doc.roundedRect(MARGIN + CONTENT_W / 2 + 4, y, CONTENT_W / 2 - 4, 24, 2, 2, 'F');
-  doc.setTextColor(...slate900);
-  doc.setFontSize(8);
+  doc.setFillColor(...slate50);
+  doc.roundedRect(MARGIN + CONTENT_W / 2 + 4, y, CONTENT_W / 2 - 4, 22, 2, 2, 'FD');
+  doc.setTextColor(...slate400);
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
   doc.text('TOTAL ENTRIES', MARGIN + CONTENT_W / 2 + 9, y + 7);
-  doc.setFontSize(20);
-  doc.text(String(entries.length), MARGIN + CONTENT_W / 2 + 9, y + 19);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...charcoal);
+  doc.text(String(entries.length), MARGIN + CONTENT_W / 2 + 9, y + 18);
 
-  y += 34;
+  y += 30;
 
-  // Status summary
-  doc.setTextColor(...slate900);
-  doc.setFontSize(11);
+  // Status summary — elegant tinted cards
+  doc.setTextColor(...slate700);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('Status Summary', MARGIN, y + 5);
   y += 10;
@@ -464,16 +496,19 @@ async function generatePDF(entries, filters, project) {
   STATUS_TYPES.forEach((s, i) => {
     const sx = MARGIN + i * (swatchW + 3);
     const count = statusCounts[s.id];
-    const col = statusColors[s.id] || blue;
-    doc.setFillColor(...col);
-    doc.roundedRect(sx, y, swatchW, 20, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
+    const bg = statusBgColors[s.id] || slate50;
+    const txt = statusTextColors[s.id] || slate700;
+    doc.setFillColor(...bg);
+    doc.setDrawColor(...txt);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(sx, y, swatchW, 20, 2, 2, 'FD');
+    doc.setTextColor(...txt);
+    doc.setFontSize(15);
     doc.setFont('helvetica', 'bold');
-    doc.text(String(count), sx + swatchW / 2, y + 12, { align: 'center' });
-    doc.setFontSize(7);
+    doc.text(String(count), sx + swatchW / 2, y + 11, { align: 'center' });
+    doc.setFontSize(6.5);
     doc.setFont('helvetica', 'normal');
-    doc.text(s.label.toUpperCase(), sx + swatchW / 2, y + 18, { align: 'center' });
+    doc.text(s.label.toUpperCase(), sx + swatchW / 2, y + 17, { align: 'center' });
   });
 
   y += 28;
@@ -500,9 +535,9 @@ async function generatePDF(entries, filters, project) {
       getStatus(e.status).label,
       e.inspector || '—',
     ]),
-    styles: { fontSize: 8, cellPadding: 2.5 },
-    headStyles: { fillColor: blue, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-    alternateRowStyles: { fillColor: slate100 },
+    styles: { fontSize: 8, cellPadding: 3, textColor: slate700 },
+    headStyles: { fillColor: charcoal, textColor: white, fontStyle: 'bold', fontSize: 7.5 },
+    alternateRowStyles: { fillColor: slate50 },
     columnStyles: {
       0: { cellWidth: 22 },
       1: { cellWidth: 14 },
@@ -515,7 +550,7 @@ async function generatePDF(entries, filters, project) {
       if (data.column.index === 4 && data.section === 'body') {
         const status = STATUS_TYPES.find(s => s.label === data.cell.raw);
         if (status) {
-          data.cell.styles.textColor = statusColors[status.id] || [0, 0, 0];
+          data.cell.styles.textColor = statusColors[status.id] || slate700;
           data.cell.styles.fontStyle = 'bold';
         }
       }
@@ -534,15 +569,22 @@ async function generatePDF(entries, filters, project) {
 
     newPage();
 
-    // Date header
-    doc.setFillColor(...blue);
-    doc.rect(MARGIN, y, CONTENT_W, 10, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
+    // Date header — muted charcoal with left accent
+    doc.setFillColor(...charcoal);
+    doc.rect(MARGIN, y, 3, 9, 'F');
+    doc.setFillColor(...slate50);
+    doc.setDrawColor(...slate200);
+    doc.setLineWidth(0.2);
+    doc.rect(MARGIN + 3, y, CONTENT_W - 3, 9, 'FD');
+    doc.setTextColor(...charcoal);
+    doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text(formatDate(date), MARGIN + 3, y + 7);
-    doc.text(`${dayEntries.length} entr${dayEntries.length === 1 ? 'y' : 'ies'}`, PAGE_W - MARGIN - 3, y + 7, { align: 'right' });
-    y += 14;
+    doc.text(formatDate(date), MARGIN + 8, y + 6.2);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...slate400);
+    doc.setFontSize(8);
+    doc.text(`${dayEntries.length} entr${dayEntries.length === 1 ? 'y' : 'ies'}`, PAGE_W - MARGIN - 3, y + 6.2, { align: 'right' });
+    y += 13;
 
     for (const entry of dayEntries) {
       const type = getType(entry.type);
@@ -551,29 +593,37 @@ async function generatePDF(entries, filters, project) {
 
       checkY(35);
 
-      // Entry header bar
-      doc.setFillColor(240, 244, 255);
-      doc.roundedRect(MARGIN, y, CONTENT_W, 14, 2, 2, 'F');
-      doc.setFillColor(...(type.color.match(/\w\w/g).map(x => parseInt(x, 16)) || blue));
-      doc.rect(MARGIN, y, 3, 14, 'F');
+      // Entry header bar — clean white with left color accent
+      doc.setFillColor(...white);
+      doc.setDrawColor(...slate200);
+      doc.setLineWidth(0.25);
+      doc.roundedRect(MARGIN, y, CONTENT_W, 14, 2, 2, 'FD');
+      // Left accent stripe in type color
+      const typeRgb = type.color.match(/\w\w/g)?.map(x => parseInt(x, 16)) || charcoal;
+      doc.setFillColor(...typeRgb);
+      doc.roundedRect(MARGIN, y, 3.5, 14, 1, 1, 'F');
 
       doc.setTextColor(...slate900);
-      doc.setFontSize(10);
+      doc.setFontSize(9.5);
       doc.setFont('helvetica', 'bold');
-      doc.text(entry.title || 'Untitled Entry', MARGIN + 6, y + 5.5);
+      doc.text(entry.title || 'Untitled Entry', MARGIN + 7, y + 5.5);
 
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(...slate600);
-      doc.text(`${type.label}  ·  ${formatTime(entry.time)}${entry.inspector ? `  ·  ${entry.inspector}` : ''}`, MARGIN + 6, y + 11);
+      doc.setTextColor(...slate400);
+      doc.text(`${type.label}  ·  ${formatTime(entry.time)}${entry.inspector ? `  ·  ${entry.inspector}` : ''}`, MARGIN + 7, y + 11);
 
-      // Status badge
-      doc.setFillColor(...statusCol);
-      doc.roundedRect(PAGE_W - MARGIN - 28, y + 3, 25, 7, 2, 2, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(7);
+      // Status badge — tinted (not solid)
+      const statusBg = statusBgColors[entry.status] || slate50;
+      const statusTxt = statusTextColors[entry.status] || slate700;
+      doc.setFillColor(...statusBg);
+      doc.setDrawColor(...statusTxt);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(PAGE_W - MARGIN - 30, y + 3.5, 27, 6.5, 1.5, 1.5, 'FD');
+      doc.setTextColor(...statusTxt);
+      doc.setFontSize(6.5);
       doc.setFont('helvetica', 'bold');
-      doc.text(status.label.toUpperCase(), PAGE_W - MARGIN - 15.5, y + 7.5, { align: 'center' });
+      doc.text(status.label.toUpperCase(), PAGE_W - MARGIN - 16.5, y + 7.5, { align: 'center' });
 
       y += 17;
 
@@ -696,10 +746,11 @@ async function generatePDF(entries, filters, project) {
         (e.title || '—').slice(0, 30),
         (e.correctiveActions || '—').slice(0, 50),
         e.followUpRequired ? (e.followUpDate ? formatDateShort(e.followUpDate) : 'Yes') : '—',
+
       ]),
-      styles: { fontSize: 8, cellPadding: 2.5 },
-      headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [255, 251, 235] },
+      styles: { fontSize: 8, cellPadding: 3, textColor: slate700 },
+      headStyles: { fillColor: charcoal, textColor: white, fontStyle: 'bold', fontSize: 7.5 },
+      alternateRowStyles: { fillColor: slate50 },
       didDrawPage: () => addPageFooter(),
     });
   }
@@ -715,10 +766,10 @@ function generateHTML(entries, filters, project) {
   const sortedDates = Object.keys(grouped).sort();
 
   const statusColors = {
-    'compliant':     { bg: '#dcfce7', color: '#16a34a' },
-    'non-compliant': { bg: '#fee2e2', color: '#dc2626' },
-    'advisory':      { bg: '#fef3c7', color: '#d97706' },
-    'observation':   { bg: '#dbeafe', color: '#2563eb' },
+    'compliant':     { bg: '#f0fdf4', color: '#166534', border: '#bbf7d0' },
+    'non-compliant': { bg: '#fef2f2', color: '#991b1b', border: '#fecaca' },
+    'advisory':      { bg: '#fffbeb', color: '#92400e', border: '#fde68a' },
+    'observation':   { bg: '#eff6ff', color: '#1e40af', border: '#bfdbfe' },
   };
 
   const html = `<!DOCTYPE html>
@@ -730,52 +781,53 @@ function generateHTML(entries, filters, project) {
 <style>
   :root { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #f1f5f9; color: #0f172a; line-height: 1.5; }
-  .cover { background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); color: white; padding: 48px; }
-  .cover h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
-  .cover .subtitle { font-size: 16px; opacity: 0.8; margin-bottom: 32px; }
-  .project-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: rgba(255,255,255,0.1); border-radius: 12px; padding: 24px; max-width: 600px; }
-  .project-item label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; display: block; }
-  .project-item span { font-size: 14px; font-weight: 600; }
-  .stats-row { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
-  .stat-pill { background: rgba(255,255,255,0.15); border-radius: 8px; padding: 12px 20px; }
-  .stat-pill .num { font-size: 24px; font-weight: 800; display: block; }
-  .stat-pill .lbl { font-size: 12px; opacity: 0.8; }
-  .content { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+  body { background: #f1f5f9; color: #1e293b; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .cover { background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%); color: white; padding: 52px 48px 44px; }
+  .cover h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.4px; }
+  .cover .subtitle { font-size: 15px; color: #94a3b8; margin-bottom: 32px; }
+  .project-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 24px; max-width: 580px; }
+  .project-item label { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748b; display: block; margin-bottom: 3px; }
+  .project-item span { font-size: 13.5px; font-weight: 500; color: #e2e8f0; }
+  .stats-row { display: flex; gap: 10px; margin-top: 24px; flex-wrap: wrap; }
+  .stat-pill { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 18px; min-width: 90px; }
+  .stat-pill .num { font-size: 20px; font-weight: 700; display: block; color: white; }
+  .stat-pill .lbl { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .content { max-width: 900px; margin: 0 auto; padding: 36px 24px; }
   .date-group { margin-bottom: 40px; }
-  .date-header { background: #1d4ed8; color: white; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-weight: 700; display: flex; justify-content: space-between; }
-  .entry-card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-  .entry-header { display: flex; align-items: flex-start; padding: 16px; gap: 12px; }
-  .type-bar { width: 4px; border-radius: 2px; align-self: stretch; flex-shrink: 0; }
+  .date-header { background: white; border: 1px solid #e2e8f0; border-left: 4px solid #334155; color: #1e293b; padding: 10px 16px; border-radius: 6px; margin-bottom: 16px; font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .date-header .count { font-size: 12px; color: #94a3b8; font-weight: 400; }
+  .entry-card { background: white; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 14px; overflow: hidden; }
+  .entry-header { display: flex; align-items: flex-start; padding: 16px; gap: 12px; border-bottom: 1px solid #f1f5f9; }
+  .type-bar { width: 3.5px; border-radius: 2px; align-self: stretch; flex-shrink: 0; }
   .entry-meta { flex: 1; }
-  .type-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-  .entry-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-  .meta-row { display: flex; gap: 12px; font-size: 12px; color: #64748b; }
-  .status-badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-  .entry-body { padding: 0 16px 16px; }
-  .description { font-size: 14px; color: #374151; line-height: 1.6; margin-bottom: 12px; white-space: pre-wrap; }
+  .type-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+  .entry-title { font-size: 15px; font-weight: 600; margin-bottom: 5px; color: #0f172a; }
+  .meta-row { display: flex; gap: 14px; font-size: 12px; color: #64748b; flex-wrap: wrap; }
+  .status-badge { display: inline-block; padding: 3px 9px; border-radius: 9999px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; border: 1px solid transparent; }
+  .entry-body { padding: 14px 16px 16px; }
+  .description { font-size: 13.5px; color: #334155; line-height: 1.65; margin-bottom: 14px; white-space: pre-wrap; }
   .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px; }
-  .photos img { width: 100%; border-radius: 8px; object-fit: cover; aspect-ratio: 4/3; }
-  .location { font-size: 12px; color: #3b82f6; margin-bottom: 8px; }
-  .corrective { background: #fffbeb; border-left: 3px solid #d97706; padding: 10px 12px; border-radius: 4px; font-size: 13px; margin-bottom: 8px; }
-  .corrective strong { display: block; color: #d97706; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
-  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .tag { background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 9999px; font-size: 12px; }
-  .followup { background: #fef3c7; color: #d97706; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; display: inline-block; }
-  .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-  .summary-table th { background: #1d4ed8; color: white; padding: 10px 12px; text-align: left; font-size: 12px; }
-  .summary-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+  .photos img { width: 100%; border-radius: 6px; object-fit: cover; aspect-ratio: 4/3; }
+  .location { font-size: 12px; color: #475569; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
+  .corrective { background: #fffbeb; border: 1px solid #fde68a; border-left: 3px solid #b45309; padding: 10px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; color: #334155; }
+  .corrective strong { display: block; color: #b45309; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 700; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+  .tag { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 9999px; font-size: 11.5px; border: 1px solid #e2e8f0; }
+  .followup { background: #fefce8; color: #854d0e; border: 1px solid #fde68a; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; display: inline-block; }
+  .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; }
+  .summary-table th { background: #1e293b; color: #cbd5e1; padding: 10px 13px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-table td { padding: 10px 13px; font-size: 13px; border-bottom: 1px solid #f1f5f9; color: #334155; }
   .summary-table tr:last-child td { border-bottom: none; }
   .summary-table tr:nth-child(even) td { background: #f8fafc; }
-  h2 { font-size: 20px; font-weight: 800; margin: 32px 0 16px; color: #0f172a; }
-  .footer { background: #0f172a; color: #64748b; text-align: center; padding: 24px; font-size: 12px; margin-top: 48px; }
+  h2 { font-size: 18px; font-weight: 700; margin: 36px 0 16px; color: #0f172a; letter-spacing: -0.3px; }
+  .footer { background: #1e293b; color: #475569; text-align: center; padding: 24px; font-size: 12px; margin-top: 48px; }
   @media print { body { background: white; } .cover { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 </style>
 </head>
 <body>
 
 <div class="cover">
-  ${project.logo ? `<img src="${project.logo}" style="height:60px;margin-bottom:16px;border-radius:4px" alt="Logo">` : ''}
+  ${project.logo ? `<img src="${project.logo}" style="height:52px;margin-bottom:20px;border-radius:4px;opacity:0.9" alt="Logo">` : ''}
   <h1>Environmental Monitoring Report</h1>
   <div class="subtitle">${sanitizeHtml(project.name || 'Construction Project')}</div>
   <div class="project-grid">
@@ -785,8 +837,8 @@ function generateHTML(entries, filters, project) {
   </div>
   <div class="stats-row">
     <div class="stat-pill"><span class="num">${entries.length}</span><span class="lbl">Total Entries</span></div>
-    <div class="stat-pill"><span class="num">${formatDateShort(filters.dateFrom)}</span><span class="lbl">From</span></div>
-    <div class="stat-pill"><span class="num">${formatDateShort(filters.dateTo)}</span><span class="lbl">To</span></div>
+    <div class="stat-pill"><span class="num">${formatDateShort(filters.dateFrom)}</span><span class="lbl">Period From</span></div>
+    <div class="stat-pill"><span class="num">${formatDateShort(filters.dateTo)}</span><span class="lbl">Period To</span></div>
     <div class="stat-pill"><span class="num">${new Date().toLocaleDateString('en-AU')}</span><span class="lbl">Generated</span></div>
   </div>
 </div>
@@ -804,7 +856,7 @@ function generateHTML(entries, filters, project) {
           <td>${formatTime(e.time)}</td>
           <td style="color:${getType(e.type).color};font-weight:600">${sanitizeHtml(getType(e.type).label)}</td>
           <td>${sanitizeHtml(e.title || '—')}</td>
-          <td><span class="status-badge" style="background:${sc.bg};color:${sc.color}">${sanitizeHtml(getStatus(e.status).label)}</span></td>
+          <td><span class="status-badge" style="background:${sc.bg};color:${sc.color};border-color:${sc.border}">${sanitizeHtml(getStatus(e.status).label)}</span></td>
           <td>${sanitizeHtml(e.inspector || '—')}</td>
         </tr>`;
       }).join('')}
@@ -818,7 +870,7 @@ function generateHTML(entries, filters, project) {
       <div class="date-group">
         <div class="date-header">
           <span>${formatDate(date)}</span>
-          <span>${dayEntries.length} entr${dayEntries.length === 1 ? 'y' : 'ies'}</span>
+          <span class="count">${dayEntries.length} entr${dayEntries.length === 1 ? 'y' : 'ies'}</span>
         </div>
         ${dayEntries.map(e => {
           const type = getType(e.type);
@@ -839,7 +891,7 @@ function generateHTML(entries, filters, project) {
                     ${e.temperature != null ? `<span>${e.temperature}°C</span>` : ''}
                   </div>
                 </div>
-                <span class="status-badge" style="background:${sc.bg};color:${sc.color}">${sanitizeHtml(status.label)}</span>
+                <span class="status-badge" style="background:${sc.bg};color:${sc.color};border-color:${sc.border}">${sanitizeHtml(status.label)}</span>
               </div>
               <div class="entry-body">
                 ${e.description ? `<div class="description">${sanitizeHtml(e.description)}</div>` : ''}
