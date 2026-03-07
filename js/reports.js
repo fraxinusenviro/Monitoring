@@ -428,6 +428,36 @@ async function generatePDF(entries, filters, project) {
     }
   }
 
+  // ── Pre-render status icons as white PNG data URLs via canvas ──
+  const statusIconPaths = {
+    'compliant':     '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    'non-compliant': '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+    'advisory':      '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+    'observation':   '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  };
+  const iconPngs = {};
+  await Promise.all(
+    Object.entries(statusIconPaths).map(([id, paths]) =>
+      new Promise(resolve => {
+        const size = 64;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+        const img = new Image();
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = size; canvas.height = size;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          iconPngs[id] = canvas.toDataURL('image/png');
+          resolve();
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+        img.src = url;
+      })
+    )
+  );
+
   // ── Cover Page ──
   const reportTitle = project.reportTitle || 'Environmental Monitoring Report';
   const reportSubtitle = project.reportSubtitle || 'Construction Site Environmental Inspection';
@@ -520,8 +550,6 @@ async function generatePDF(entries, filters, project) {
     ['Site Address', project.address || '—'],
     ['Client',       project.client || '—'],
     ['Contractor',   project.contractor || '—'],
-    ['Observer',     [project.observerFirst, project.observerLast].filter(Boolean).join(' ') || '—'],
-    ['Approval Ref', project.approvalRef || '—'],
   ];
 
   const col1X = MARGIN + 5;
@@ -546,6 +574,9 @@ async function generatePDF(entries, filters, project) {
   doc.setTextColor(...slate400);
   doc.text('STATUS SUMMARY', rightX, y + 5.5);
 
+  const tabW = 14; // wider tab with icon
+  const tabR = 2;  // corner radius — matches enclosing card
+
   let sy = y + 9;
   STATUS_TYPES.forEach(s => {
     const bg  = statusBgColors[s.id]   || slate50;
@@ -555,17 +586,33 @@ async function generatePDF(entries, filters, project) {
     doc.setFillColor(...bg);
     doc.setDrawColor(...txt);
     doc.setLineWidth(0.35);
-    doc.roundedRect(rightX, sy, rightW, cardH, 2, 2, 'FD');
+    doc.roundedRect(rightX, sy, rightW, cardH, tabR, tabR, 'FD');
 
-    // Left accent bar (solid colour, overlaid on rounded rect)
+    // Left accent tab — rounded on left side only:
+    //   1. Draw full rounded rect (all corners rounded)
     doc.setFillColor(...txt);
-    doc.rect(rightX, sy, 3.5, cardH, 'F');
+    doc.roundedRect(rightX, sy, tabW, cardH, tabR, tabR, 'F');
+    //   2. Fill a plain rect over the right portion to square off those corners
+    doc.rect(rightX + tabW - tabR, sy, tabR, cardH, 'F');
 
-    // Status label
+    // Icon centred inside the tab
+    if (iconPngs[s.id]) {
+      try {
+        const iconSize = cardH - 4;
+        doc.addImage(
+          iconPngs[s.id], 'PNG',
+          rightX + (tabW - iconSize) / 2, sy + 2,
+          iconSize, iconSize,
+          undefined, 'NONE'
+        );
+      } catch {}
+    }
+
+    // Status label — left of content area, after tab
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...txt);
-    doc.text(s.label, rightX + 6, sy + cardH / 2 + 2.5);
+    doc.text(s.label, rightX + tabW + 3, sy + cardH / 2 + 2.5);
 
     // Count — right-aligned
     doc.setFontSize(13);
@@ -578,10 +625,10 @@ async function generatePDF(entries, filters, project) {
   y += projBoxH + 8;
 
   // ── Summary Table — on cover page, auto-continues if needed ──
-  doc.setFontSize(10);
+  doc.setFontSize(6.5);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...slate900);
-  doc.text('Entries Summary', MARGIN, y);
+  doc.setTextColor(...slate400);
+  doc.text('ENTRIES SUMMARY', MARGIN, y);
   y += 5;
 
   doc.autoTable({
