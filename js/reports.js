@@ -813,8 +813,8 @@ async function generatePDF(entries, filters, project) {
 
       // Row 3: Observer · Time
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(...slate600);
+      doc.setFontSize(9);
+      doc.setTextColor(...slate900);
       const observerTimeParts = [
         observer ? `Observer: ${observer}` : null,
         entry.time ? formatTime(entry.time) : null,
@@ -825,8 +825,8 @@ async function generatePDF(entries, filters, project) {
       // Row 4: Conditions (if any)
       if (hasConditions) {
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.5);
-        doc.setTextColor(...slate600);
+        doc.setFontSize(9);
+        doc.setTextColor(...slate900);
         doc.text(`Conditions: ${conditionsParts.join('  ·  ')}`, hx, hy);
         hy += 6;
       }
@@ -834,8 +834,8 @@ async function generatePDF(entries, filters, project) {
       // Row 5: Location coords (if any)
       if (hasLocation) {
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.5);
-        doc.setTextColor(...slate600);
+        doc.setFontSize(9);
+        doc.setTextColor(...slate900);
         const coordStr = `${entry.location.lat.toFixed(6)}, ${entry.location.lng.toFixed(6)}${entry.location.address ? `  —  ${entry.location.address}` : ''}`;
         doc.text(`Location: ${coordStr}`, hx, hy);
         hy += 6;
