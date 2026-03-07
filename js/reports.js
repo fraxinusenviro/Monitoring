@@ -845,16 +845,16 @@ async function generatePDF(entries, filters, project) {
 
       // ── DESCRIPTION ──
       drawSectionRule('Description');
-      doc.setFontSize(11);
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...slate900);
       if (entry.description) {
         const lines = doc.splitTextToSize(entry.description, CONTENT_W);
-        renderText(lines, MARGIN, 5.5);
+        renderText(lines, MARGIN, 4.5);
         y += 2;
       } else {
         doc.text('N/A', MARGIN, y);
-        y += 7;
+        y += 5;
       }
 
       // ── CORRECTIVE ACTIONS ──
@@ -865,35 +865,34 @@ async function generatePDF(entries, filters, project) {
         doc.setTextColor(146, 64, 14);
         doc.text('ACTION REQUIRED', MARGIN, y);
         y += 5;
-        doc.setFontSize(11);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate900);
         const caLines = doc.splitTextToSize(entry.correctiveActions, CONTENT_W - 4);
-        renderText(caLines, MARGIN + 2, 5.5);
+        renderText(caLines, MARGIN + 2, 4.5);
         y += 2;
       } else {
-        doc.setFontSize(11);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate900);
         doc.text('None Required', MARGIN, y);
-        y += 7;
+        y += 5;
       }
 
       // ── FOLLOW-UP ──
       drawSectionRule('Follow-Up');
-      doc.setFontSize(11);
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...slate900);
       if (entry.followUpRequired) {
-        doc.setFont('helvetica', 'bold');
         doc.text(
           entry.followUpDate ? `Required by ${formatDateShort(entry.followUpDate)}` : 'Required — no date specified',
           MARGIN, y
         );
-        y += 7;
+        y += 5;
       } else {
         doc.text('None Required', MARGIN, y);
-        y += 7;
+        y += 5;
       }
 
       // ── PHOTOGRAPHS ──
@@ -949,11 +948,11 @@ async function generatePDF(entries, filters, project) {
           y += 2;
         }
       } else {
-        doc.setFontSize(11);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate900);
         doc.text('None', MARGIN, y);
-        y += 7;
+        y += 5;
       }
 
       // ── MAP ──
@@ -967,19 +966,19 @@ async function generatePDF(entries, filters, project) {
             y += 42;
           } catch {}
         }
-        checkY(11);
-        doc.setFontSize(11);
+        checkY(8);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate900);
         const coordText = `${entry.location.lat.toFixed(6)}, ${entry.location.lng.toFixed(6)}${entry.location.address ? `  —  ${entry.location.address}` : ''}`;
         doc.text(coordText, MARGIN, y);
-        y += 7;
+        y += 5;
       } else {
-        doc.setFontSize(11);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(...slate900);
         doc.text('N/A', MARGIN, y);
-        y += 7;
+        y += 5;
       }
 
       // ── TAGS ──
