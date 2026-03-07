@@ -456,111 +456,133 @@ async function generatePDF(entries, filters, project) {
 
   doc.setTextColor(...slate900);
 
-  // Push y below the black header so the project box doesn't overlap
+  // Push y below the black header
   y = 30;
 
-  // Project details box — clean white card with subtle border
+  // ── Report Period & Total Entries — small pills directly below header ──
+  const pillH = 15;
+  const halfW = CONTENT_W / 2 - 3;
+
+  doc.setFillColor(...slate50);
+  doc.setDrawColor(...slate200);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(MARGIN, y, halfW, pillH, 2, 2, 'FD');
+  doc.setTextColor(...slate400);
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('REPORT PERIOD', MARGIN + 4, y + 5.5);
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...slate700);
+  doc.text(`${formatDateShort(filters.dateFrom)} — ${formatDateShort(filters.dateTo)}`, MARGIN + 4, y + 12);
+
+  doc.setFillColor(...slate50);
+  doc.setDrawColor(...slate200);
+  doc.roundedRect(MARGIN + halfW + 6, y, halfW, pillH, 2, 2, 'FD');
+  doc.setTextColor(...slate400);
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTAL ENTRIES', MARGIN + halfW + 10, y + 5.5);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...charcoal);
+  doc.text(String(entries.length), MARGIN + halfW + 10, y + 13.5);
+
+  y += pillH + 5;
+
+  // ── Two-column: Project Info (left) | Status Summary (right) ──
+  const leftW  = 113;
+  const gapW   = 5;
+  const rightW = CONTENT_W - leftW - gapW;
+  const rightX = MARGIN + leftW + gapW;
+
+  // Status counts (needed for both columns)
+  const statusCounts = {};
+  STATUS_TYPES.forEach(s => { statusCounts[s.id] = 0; });
+  entries.forEach(e => { if (statusCounts[e.status] !== undefined) statusCounts[e.status]++; });
+
+  // Right column: Status summary (vertical stack) — draw first to know height
+  const cardH = 13;
+  const cardGap = 2.5;
+  const statusStackH = 9 + STATUS_TYPES.length * (cardH + cardGap) - cardGap;
+
+  const projBoxH = Math.max(66, statusStackH);
+
+  // Left column: Project Info box
   doc.setFillColor(...white);
   doc.setDrawColor(...slate200);
   doc.setLineWidth(0.3);
-  doc.roundedRect(MARGIN, y, CONTENT_W, 62, 3, 3, 'FD');
+  doc.roundedRect(MARGIN, y, leftW, projBoxH, 3, 3, 'FD');
 
   const details = [
-    ['Project', project.name || '—'],
-    ['Project No.', project.number || '—'],
+    ['Project',      project.name || '—'],
+    ['Project No.',  project.number || '—'],
     ['Site Address', project.address || '—'],
-    ['Client', project.client || '—'],
-    ['Contractor', project.contractor || '—'],
-    ['Observer', [project.observerFirst, project.observerLast].filter(Boolean).join(' ') || '—'],
+    ['Client',       project.client || '—'],
+    ['Contractor',   project.contractor || '—'],
+    ['Observer',     [project.observerFirst, project.observerLast].filter(Boolean).join(' ') || '—'],
     ['Approval Ref', project.approvalRef || '—'],
   ];
 
   const col1X = MARGIN + 5;
-  const col2X = MARGIN + 44;
+  const col2X = MARGIN + 43;
   let detY = y + 9;
 
   details.forEach(([label, value]) => {
-    if (detY > y + 57) return;
-    doc.setFontSize(7.5);
+    if (detY > y + projBoxH - 5) return;
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...slate400);
     doc.text(label.toUpperCase(), col1X, detY);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...slate700);
-    doc.text(String(value).slice(0, 60), col2X, detY);
-    detY += 8;
+    doc.text(String(value).slice(0, 48), col2X, detY);
+    detY += (projBoxH - 9) / details.length;
   });
 
-  y += 70;
-
-  // Report period — muted pill boxes
-  doc.setFillColor(...slate50);
-  doc.setDrawColor(...slate200);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(MARGIN, y, CONTENT_W / 2 - 4, 22, 2, 2, 'FD');
+  // Right column: Status stack
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
   doc.setTextColor(...slate400);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'bold');
-  doc.text('REPORT PERIOD', MARGIN + 5, y + 7);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...slate700);
-  doc.text(`${formatDateShort(filters.dateFrom)} — ${formatDateShort(filters.dateTo)}`, MARGIN + 5, y + 16);
+  doc.text('STATUS SUMMARY', rightX, y + 5.5);
 
-  doc.setFillColor(...slate50);
-  doc.roundedRect(MARGIN + CONTENT_W / 2 + 4, y, CONTENT_W / 2 - 4, 22, 2, 2, 'FD');
-  doc.setTextColor(...slate400);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TOTAL ENTRIES', MARGIN + CONTENT_W / 2 + 9, y + 7);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...charcoal);
-  doc.text(String(entries.length), MARGIN + CONTENT_W / 2 + 9, y + 18);
-
-  y += 30;
-
-  // Status summary — elegant tinted cards
-  doc.setTextColor(...slate700);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Status Summary', MARGIN, y + 5);
-  y += 10;
-
-  const statusCounts = {};
-  STATUS_TYPES.forEach(s => { statusCounts[s.id] = 0; });
-  entries.forEach(e => { if (statusCounts[e.status] !== undefined) statusCounts[e.status]++; });
-
-  const swatchW = CONTENT_W / STATUS_TYPES.length - 3;
-  STATUS_TYPES.forEach((s, i) => {
-    const sx = MARGIN + i * (swatchW + 3);
-    const count = statusCounts[s.id];
-    const bg = statusBgColors[s.id] || slate50;
+  let sy = y + 9;
+  STATUS_TYPES.forEach(s => {
+    const bg  = statusBgColors[s.id]   || slate50;
     const txt = statusTextColors[s.id] || slate700;
+
+    // Card background
     doc.setFillColor(...bg);
     doc.setDrawColor(...txt);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(sx, y, swatchW, 20, 2, 2, 'FD');
-    doc.setTextColor(...txt);
-    doc.setFontSize(15);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(rightX, sy, rightW, cardH, 2, 2, 'FD');
+
+    // Left accent bar (solid colour, overlaid on rounded rect)
+    doc.setFillColor(...txt);
+    doc.rect(rightX, sy, 3.5, cardH, 'F');
+
+    // Status label
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
-    doc.text(String(count), sx + swatchW / 2, y + 11, { align: 'center' });
-    doc.setFontSize(6.5);
-    doc.setFont('helvetica', 'normal');
-    doc.text(s.label.toUpperCase(), sx + swatchW / 2, y + 17, { align: 'center' });
+    doc.setTextColor(...txt);
+    doc.text(s.label, rightX + 6, sy + cardH / 2 + 2.5);
+
+    // Count — right-aligned
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(String(statusCounts[s.id]), rightX + rightW - 4, sy + cardH / 2 + 3.5, { align: 'right' });
+
+    sy += cardH + cardGap;
   });
 
-  y += 28;
-  addPageFooter();
+  y += projBoxH + 8;
 
-  // ── Summary Table ──
-  newPage();
-
-  doc.setFontSize(14);
+  // ── Summary Table — on cover page, auto-continues if needed ──
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...slate900);
   doc.text('Entries Summary', MARGIN, y);
-  y += 6;
+  y += 5;
 
   doc.autoTable({
     startY: y,
@@ -767,7 +789,7 @@ async function generatePDF(entries, filters, project) {
         y += 5;
         doc.setFontSize(8.5);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...slate700);
+        doc.setTextColor(...slate900);
         const caLines = doc.splitTextToSize(entry.correctiveActions, CONTENT_W - 4);
         renderText(caLines, MARGIN + 2, 4.5);
         y += 2;
@@ -871,7 +893,7 @@ async function generatePDF(entries, filters, project) {
         checkY(8);
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...slate600);
+        doc.setTextColor(...slate900);
         const coordText = `${entry.location.lat.toFixed(6)}, ${entry.location.lng.toFixed(6)}${entry.location.address ? `  —  ${entry.location.address}` : ''}`;
         doc.text(coordText, MARGIN, y);
         y += 6;
@@ -888,7 +910,7 @@ async function generatePDF(entries, filters, project) {
         drawSectionRule('Tags');
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...slate600);
+        doc.setTextColor(...slate900);
         doc.text(entry.tags.join(', '), MARGIN, y);
         y += 5;
       }
